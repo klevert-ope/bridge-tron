@@ -1,4 +1,8 @@
+// ===============================
 // Wallet detection and management utilities
+// ===============================
+
+// Wallet types
 export const WALLET_TYPES = {
 	METAMASK: "metamask",
 	TRUST_WALLET: "trustwallet",
@@ -11,6 +15,7 @@ export const WALLET_TYPES = {
 	UNKNOWN: "unknown",
 };
 
+// Wallet display names
 export const WALLET_NAMES = {
 	[WALLET_TYPES.METAMASK]: "MetaMask",
 	[WALLET_TYPES.TRUST_WALLET]: "Trust Wallet",
@@ -23,7 +28,11 @@ export const WALLET_NAMES = {
 	[WALLET_TYPES.UNKNOWN]: "Web3 Wallet",
 };
 
-// Detect wallet type based on window.ethereum properties
+// ==========================================
+// Wallet Detection
+// ==========================================
+
+// Detect EVM wallet type (MetaMask, Trust, Coinbase, Brave, Exodus, Phantom)
 export function detectWalletType() {
 	if (
 		typeof window === "undefined" ||
@@ -33,146 +42,62 @@ export function detectWalletType() {
 	}
 
 	const ethereum = window.ethereum;
+	const providers = ethereum.providers || [
+		ethereum,
+	];
 
-	// Enhanced detection with better priority order and additional checks
-
-	// 1. Check for Phantom (most specific)
-	if (ethereum.isPhantom) {
-		return WALLET_TYPES.PHANTOM;
-	}
-
-	// 2. Check for Exodus
-	if (ethereum.isExodus) {
-		return WALLET_TYPES.EXODUS;
-	}
-
-	// 3. Check for Trust Wallet (multiple detection methods)
-	if (
-		ethereum.isTrust ||
-		ethereum.trust ||
-		ethereum.isTrustWallet
-	) {
-		return WALLET_TYPES.TRUST_WALLET;
-	}
-
-	// 4. Check for Brave Wallet (which also has isMetaMask = true)
-	if (ethereum.isBraveWallet) {
-		return WALLET_TYPES.BRAVE;
-	}
-
-	// 5. Check for Coinbase Wallet (which also has isMetaMask = true)
-	if (ethereum.isCoinbaseWallet) {
-		return WALLET_TYPES.COINBASE;
-	}
-
-	// 6. Check for MetaMask (after checking other wallets that also set isMetaMask)
-	if (ethereum.isMetaMask) {
-		// Additional checks for wallets that might set isMetaMask = true
-		if (navigator.userAgent.includes("Brave")) {
-			return WALLET_TYPES.BRAVE;
-		}
-
-		// Check for Trust Wallet by additional properties (prioritize Trust Wallet over MetaMask)
+	for (const provider of providers) {
+		if (provider.isPhantom)
+			return WALLET_TYPES.PHANTOM;
+		if (provider.isExodus)
+			return WALLET_TYPES.EXODUS;
 		if (
-			ethereum.isTrust ||
-			ethereum.trust ||
-			ethereum.isTrustWallet
-		) {
+			provider.isTrust ||
+			provider.trust ||
+			provider.isTrustWallet
+		)
 			return WALLET_TYPES.TRUST_WALLET;
-		}
-
-		// Check for Coinbase Wallet by additional properties
-		if (
-			ethereum.providers &&
-			ethereum.providers.length > 0
-		) {
-			const coinbaseProvider =
-				ethereum.providers.find(
-					(p) => p.isCoinbaseWallet
-				);
-			if (coinbaseProvider) {
-				return WALLET_TYPES.COINBASE;
-			}
-		}
-
-		return WALLET_TYPES.METAMASK;
+		if (provider.isBraveWallet)
+			return WALLET_TYPES.BRAVE;
+		if (provider.isCoinbaseWallet)
+			return WALLET_TYPES.COINBASE;
+		if (provider.isMetaMask)
+			return WALLET_TYPES.METAMASK;
 	}
 
-	// 7. Check for multiple providers (some wallets inject multiple providers)
-	if (
-		ethereum.providers &&
-		ethereum.providers.length > 0
-	) {
-		// Find the first active provider
-		for (const provider of ethereum.providers) {
-			// Check for Trust Wallet first in providers
-			if (
-				provider.isTrust ||
-				provider.trust ||
-				provider.isTrustWallet
-			) {
-				return WALLET_TYPES.TRUST_WALLET;
-			}
-			if (provider.isMetaMask) {
-				if (provider.isBraveWallet)
-					return WALLET_TYPES.BRAVE;
-				if (provider.isCoinbaseWallet)
-					return WALLET_TYPES.COINBASE;
-				if (
-					provider.isTrust ||
-					provider.trust ||
-					provider.isTrustWallet
-				)
-					return WALLET_TYPES.TRUST_WALLET;
-				return WALLET_TYPES.METAMASK;
-			}
-			if (provider.isPhantom)
-				return WALLET_TYPES.PHANTOM;
-			if (provider.isExodus)
-				return WALLET_TYPES.EXODUS;
-		}
-	}
-
-	// 8. Fallback for other Web3 wallets
 	return WALLET_TYPES.UNKNOWN;
 }
 
-// Detect Tron wallet type
-export function detectTronWalletType() {
-	if (typeof window === "undefined") {
-		return null;
+// Detect Tron wallet type (with retries, since TronLink takes time to load)
+export async function detectTronWalletType(
+	retries = 5,
+	delay = 500
+) {
+	for (let i = 0; i < retries; i++) {
+		if (window.tronWeb && window.tronWeb.ready) {
+			return WALLET_TYPES.TRONLINK;
+		}
+		if (window.tronWallet) {
+			return WALLET_TYPES.TRONWALLET;
+		}
+		await new Promise((r) =>
+			setTimeout(r, delay)
+		);
 	}
-
-	// Check for TronLink
-	if (window.tronWeb && window.tronWeb.ready) {
-		return WALLET_TYPES.TRONLINK;
-	}
-
-	// Check for TronWallet
-	if (window.tronWallet) {
-		return WALLET_TYPES.TRONWALLET;
-	}
-
-	// Check for other Tron wallets that might inject tronWeb
-	if (window.tronWeb) {
-		return WALLET_TYPES.TRONLINK; // Default to TronLink
-	}
-
 	return null;
 }
 
-// Get wallet name for display
+// ==========================================
+// Wallet Info Helpers
+// ==========================================
+
 export function getWalletName(walletType) {
-	if (!walletType) {
-		return "Web3 Wallet";
-	}
-	return (
-		WALLET_NAMES[walletType] ||
-		WALLET_NAMES[WALLET_TYPES.UNKNOWN]
-	);
+	return walletType
+		? WALLET_NAMES[walletType] ||
+				WALLET_NAMES[WALLET_TYPES.UNKNOWN]
+		: WALLET_NAMES[WALLET_TYPES.UNKNOWN];
 }
 
-// Get detected wallet info
 export function getDetectedWalletInfo() {
 	const walletType = detectWalletType();
 	return {
@@ -182,71 +107,47 @@ export function getDetectedWalletInfo() {
 	};
 }
 
-// Get all available wallets (for multiple wallet detection)
+export async function getDetectedTronWalletInfo() {
+	const walletType = await detectTronWalletType();
+	return {
+		type: walletType,
+		name: getWalletName(walletType),
+		isInstalled: !!walletType,
+	};
+}
+
 export function getAllAvailableWallets() {
 	if (
 		typeof window === "undefined" ||
 		!window.ethereum
-	) {
+	)
 		return [];
-	}
 
-	const availableWallets = [];
 	const ethereum = window.ethereum;
+	const providers = ethereum.providers || [
+		ethereum,
+	];
 
-	// Check for multiple providers
-	if (
-		ethereum.providers &&
-		ethereum.providers.length > 0
-	) {
-		ethereum.providers.forEach((provider) => {
-			if (provider.isMetaMask) {
-				if (provider.isBraveWallet) {
-					availableWallets.push(
-						WALLET_TYPES.BRAVE
-					);
-				} else if (provider.isCoinbaseWallet) {
-					availableWallets.push(
-						WALLET_TYPES.COINBASE
-					);
-				} else if (provider.isTrust) {
-					availableWallets.push(
-						WALLET_TYPES.TRUST_WALLET
-					);
-				} else {
-					availableWallets.push(
-						WALLET_TYPES.METAMASK
-					);
-				}
-			} else if (provider.isPhantom) {
-				availableWallets.push(
-					WALLET_TYPES.PHANTOM
-				);
-			} else if (provider.isExodus) {
-				availableWallets.push(
-					WALLET_TYPES.EXODUS
-				);
-			}
-		});
-	} else {
-		// Single provider detection
-		const walletType = detectWalletType();
-		if (walletType) {
-			availableWallets.push(walletType);
-		}
-	}
+	const detected = providers.map((p) => {
+		if (p.isPhantom) return WALLET_TYPES.PHANTOM;
+		if (p.isExodus) return WALLET_TYPES.EXODUS;
+		if (p.isTrust || p.trust || p.isTrustWallet)
+			return WALLET_TYPES.TRUST_WALLET;
+		if (p.isBraveWallet)
+			return WALLET_TYPES.BRAVE;
+		if (p.isCoinbaseWallet)
+			return WALLET_TYPES.COINBASE;
+		if (p.isMetaMask)
+			return WALLET_TYPES.METAMASK;
+		return WALLET_TYPES.UNKNOWN;
+	});
 
-	// Remove duplicates and return
-	return [...new Set(availableWallets)];
+	return [...new Set(detected)];
 }
 
-// Get the best available wallet (prioritized)
 export function getBestAvailableWallet() {
-	const availableWallets =
-		getAllAvailableWallets();
-
-	// Priority order: Trust Wallet first (since user is having issues), then MetaMask, Coinbase, Brave, Exodus, Phantom
-	const priorityOrder = [
+	const available = getAllAvailableWallets();
+	const priority = [
 		WALLET_TYPES.TRUST_WALLET,
 		WALLET_TYPES.METAMASK,
 		WALLET_TYPES.COINBASE,
@@ -255,68 +156,16 @@ export function getBestAvailableWallet() {
 		WALLET_TYPES.PHANTOM,
 	];
 
-	// Return the first available wallet in priority order
-	for (const priorityWallet of priorityOrder) {
-		if (
-			availableWallets.includes(priorityWallet)
-		) {
-			return priorityWallet;
-		}
+	for (const w of priority) {
+		if (available.includes(w)) return w;
 	}
-
-	// Return the first available wallet if none match priority
-	return availableWallets[0] || null;
+	return available[0] || null;
 }
 
-// Get detected Tron wallet info
-export function getDetectedTronWalletInfo() {
-	const tronWalletType = detectTronWalletType();
-	return {
-		type: tronWalletType,
-		name: getWalletName(tronWalletType),
-		isInstalled: !!tronWalletType,
-	};
-}
+// ==========================================
+// Wallet Installation & Icons
+// ==========================================
 
-// Check if any wallet is installed
-export function isAnyWalletInstalled() {
-	return (
-		typeof window !== "undefined" &&
-		!!window.ethereum
-	);
-}
-
-// Check if specific wallet is installed
-export function isWalletInstalled(walletType) {
-	const detectedType = detectWalletType();
-	return detectedType === walletType;
-}
-
-// Enhanced Trust Wallet detection
-export function isTrustWalletInstalled() {
-	if (
-		typeof window === "undefined" ||
-		!window.ethereum
-	) {
-		return false;
-	}
-
-	const ethereum = window.ethereum;
-
-	// Check multiple Trust Wallet identifiers
-	return !!(
-		ethereum.isTrust ||
-		ethereum.trust ||
-		ethereum.isTrustWallet ||
-		(ethereum.providers &&
-			ethereum.providers.some(
-				(p) =>
-					p.isTrust || p.trust || p.isTrustWallet
-			))
-	);
-}
-
-// Get wallet installation URLs
 export const WALLET_INSTALL_URLS = {
 	[WALLET_TYPES.METAMASK]:
 		"https://metamask.io/download/",
@@ -335,22 +184,15 @@ export const WALLET_INSTALL_URLS = {
 		"https://www.tronwallet.me/",
 };
 
-// Get recommended wallet installation URL
 export function getRecommendedWalletUrl() {
 	const detectedType = detectWalletType();
-	if (
-		detectedType &&
-		WALLET_INSTALL_URLS[detectedType]
-	) {
-		return WALLET_INSTALL_URLS[detectedType];
-	}
-	// Default to MetaMask if no specific wallet detected
-	return WALLET_INSTALL_URLS[
-		WALLET_TYPES.METAMASK
-	];
+	return (
+		(detectedType &&
+			WALLET_INSTALL_URLS[detectedType]) ||
+		WALLET_INSTALL_URLS[WALLET_TYPES.METAMASK]
+	);
 }
 
-// Get wallet icon (you can replace these with actual icon imports)
 export function getWalletIcon(walletType) {
 	const iconMap = {
 		[WALLET_TYPES.METAMASK]: "🦊",
@@ -369,151 +211,110 @@ export function getWalletIcon(walletType) {
 	);
 }
 
-// Validate if the wallet supports required features
+// ==========================================
+// Validation & Provider Management
+// ==========================================
+
 export async function validateWalletSupport(
-	ethereumProvider
+	provider
 ) {
 	try {
-		// Check if provider supports basic Ethereum methods
-		if (!ethereumProvider.request) {
+		if (!provider?.request)
 			throw new Error(
 				"Provider does not support request method"
 			);
-		}
-
 		return true;
-	} catch (error) {
-		console.error(
-			"Wallet validation failed:",
-			error
-		);
+	} catch (e) {
+		console.error("Wallet validation failed:", e);
 		return false;
 	}
 }
 
-// Validate Tron wallet support
 export async function validateTronWalletSupport() {
 	try {
-		if (!window.tronWeb) {
+		if (!window.tronWeb)
 			throw new Error("Tron wallet not found");
-		}
-
-		// Check if tronWeb is ready
-		if (!window.tronWeb.ready) {
+		if (!window.tronWeb.ready)
 			throw new Error("Tron wallet not ready");
-		}
-
-		// Check if we have a default address
-		if (
-			!window.tronWeb.defaultAddress ||
-			!window.tronWeb.defaultAddress.base58
-		) {
+		if (!window.tronWeb.defaultAddress?.base58)
 			throw new Error(
 				"Tron wallet not connected"
 			);
-		}
-
 		return true;
-	} catch (error) {
+	} catch (e) {
 		console.error(
 			"Tron wallet validation failed:",
-			error
+			e
 		);
 		return false;
 	}
 }
 
-// Get Tron address from wallet
 export async function getTronAddress() {
-	try {
-		if (
-			!window.tronWeb ||
-			!window.tronWeb.ready
-		) {
-			throw new Error(
-				"Tron wallet not available"
-			);
-		}
-
-		const address =
-			window.tronWeb.defaultAddress.base58;
-		if (!address) {
-			throw new Error("No Tron address found");
-		}
-
-		return address;
-	} catch (error) {
-		console.error(
-			"Failed to get Tron address:",
-			error
-		);
-		throw error;
-	}
+	if (!window.tronWeb || !window.tronWeb.ready)
+		throw new Error("Tron wallet not available");
+	const address =
+		window.tronWeb.defaultAddress?.base58;
+	if (!address)
+		throw new Error("No Tron address found");
+	return address;
 }
 
-// Connect to Tron wallet
 export async function connectTronWallet() {
-	try {
-		if (!window.tronWeb) {
-			throw new Error(
-				"Tron wallet not installed"
-			);
-		}
-
-		// Check if wallet is ready first
-		if (!window.tronWeb.ready) {
-			throw new Error(
-				"Tron wallet not ready. Please unlock your wallet and try again."
-			);
-		}
-
-		// Try to get the current address first
-		if (
-			window.tronWeb.defaultAddress &&
-			window.tronWeb.defaultAddress.base58
-		) {
-			return window.tronWeb.defaultAddress.base58;
-		}
-
-		// Request account access if no address is available
-		try {
-			const address =
-				await window.tronWeb.request({
-					method: "tron_requestAccounts",
-				});
-
-			if (address && address.length > 0) {
-				return address[0];
-			}
-		} catch (requestError) {
-			// If request fails, try alternative method
-			console.log(
-				"Tron request failed, trying alternative method:",
-				requestError
-			);
-		}
-
-		// Alternative: try to get address from tronWeb directly
-		if (
-			window.tronWeb.defaultAddress &&
-			window.tronWeb.defaultAddress.base58
-		) {
-			return window.tronWeb.defaultAddress.base58;
-		}
-
+	if (!window.tronWeb)
+		throw new Error("Tron wallet not installed");
+	if (!window.tronWeb.ready)
 		throw new Error(
-			"No Tron address available. Please unlock your wallet and try again."
+			"Tron wallet not ready. Please unlock your wallet."
 		);
-	} catch (error) {
-		console.error(
-			"Failed to connect Tron wallet:",
-			error
+	if (window.tronWeb.defaultAddress?.base58)
+		return window.tronWeb.defaultAddress.base58;
+
+	try {
+		const accounts = await window.tronWeb.request(
+			{ method: "tron_requestAccounts" }
 		);
-		throw error;
+		if (accounts?.length > 0) return accounts[0];
+	} catch (err) {
+		console.warn("Tron request failed:", err);
 	}
+
+	if (window.tronWeb.defaultAddress?.base58)
+		return window.tronWeb.defaultAddress.base58;
+	throw new Error(
+		"No Tron address available. Please unlock your wallet."
+	);
 }
 
-// Check if Tron wallet is installed
+export function isAnyWalletInstalled() {
+	return (
+		typeof window !== "undefined" &&
+		!!window.ethereum
+	);
+}
+
+export function isWalletInstalled(walletType) {
+	return detectWalletType() === walletType;
+}
+
+export function isTrustWalletInstalled() {
+	if (
+		typeof window === "undefined" ||
+		!window.ethereum
+	)
+		return false;
+	const ethereum = window.ethereum;
+	return !!(
+		ethereum.isTrust ||
+		ethereum.trust ||
+		ethereum.isTrustWallet ||
+		ethereum.providers?.some(
+			(p) =>
+				p.isTrust || p.trust || p.isTrustWallet
+		)
+	);
+}
+
 export function isTronWalletInstalled() {
 	return (
 		typeof window !== "undefined" &&
@@ -521,12 +322,9 @@ export function isTronWalletInstalled() {
 	);
 }
 
-// Get Tron wallet status
 export function getTronWalletStatus() {
-	if (!isTronWalletInstalled()) {
+	if (!isTronWalletInstalled())
 		return { installed: false, ready: false };
-	}
-
 	return {
 		installed: true,
 		ready: window.tronWeb.ready || false,
@@ -541,25 +339,18 @@ export function getProviderForWallet(walletType) {
 	if (
 		typeof window === "undefined" ||
 		!window.ethereum
-	) {
+	)
 		return null;
-	}
 
 	const ethereum = window.ethereum;
+	const providers = ethereum.providers || [
+		ethereum,
+	];
 
-	// If it's a single provider setup
-	if (
-		!ethereum.providers ||
-		ethereum.providers.length === 0
-	) {
-		return ethereum;
-	}
-
-	// For multi-provider setups, find the correct provider
 	switch (walletType) {
 		case WALLET_TYPES.TRUST_WALLET:
 			return (
-				ethereum.providers.find(
+				providers.find(
 					(p) =>
 						p.isTrust ||
 						p.trust ||
@@ -568,7 +359,7 @@ export function getProviderForWallet(walletType) {
 			);
 		case WALLET_TYPES.METAMASK:
 			return (
-				ethereum.providers.find(
+				providers.find(
 					(p) =>
 						p.isMetaMask &&
 						!p.isBraveWallet &&
@@ -578,27 +369,24 @@ export function getProviderForWallet(walletType) {
 			);
 		case WALLET_TYPES.BRAVE:
 			return (
-				ethereum.providers.find(
-					(p) => p.isBraveWallet
-				) || ethereum
+				providers.find((p) => p.isBraveWallet) ||
+				ethereum
 			);
 		case WALLET_TYPES.COINBASE:
 			return (
-				ethereum.providers.find(
+				providers.find(
 					(p) => p.isCoinbaseWallet
 				) || ethereum
 			);
 		case WALLET_TYPES.PHANTOM:
 			return (
-				ethereum.providers.find(
-					(p) => p.isPhantom
-				) || ethereum
+				providers.find((p) => p.isPhantom) ||
+				ethereum
 			);
 		case WALLET_TYPES.EXODUS:
 			return (
-				ethereum.providers.find(
-					(p) => p.isExodus
-				) || ethereum
+				providers.find((p) => p.isExodus) ||
+				ethereum
 			);
 		default:
 			return ethereum;

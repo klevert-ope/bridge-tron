@@ -21,37 +21,29 @@ export function useWallet() {
 	const [provider, setProvider] = useState(null);
 	const [network, setNetwork] = useState(null);
 	const [error, setError] = useState(null);
+	const [walletType, setWalletType] =
+		useState(null);
 
-	// Check if Trust Wallet is installed - using enhanced detection
-	const checkTrustWalletInstalled = () => {
-		return isTrustWalletInstalled();
-	};
-
-	// Check if any Web3 wallet is installed
-	const isWeb3WalletInstalled = () => {
-		return isAnyWalletInstalled();
-	};
-
-	// Get the best available provider and detect wallet type
-	const getProvider = () => {
-		if (typeof window === "undefined")
+	// -------------------------------
+	// Provider getter (uses best wallet)
+	// -------------------------------
+	const getProvider = useCallback(() => {
+		if (
+			typeof window === "undefined" ||
+			!window.ethereum
+		)
 			return null;
 
-		if (window.ethereum) {
-			// Get the best wallet type and use the correct provider for it
-			const bestWallet = getBestAvailableWallet();
-			if (bestWallet) {
-				const correctProvider =
-					getProviderForWallet(bestWallet);
-				return correctProvider;
-			}
-			return window.ethereum;
-		}
+		const bestWallet = getBestAvailableWallet();
+		if (!bestWallet) return window.ethereum;
 
-		return null;
-	};
+		setWalletType(bestWallet);
+		return getProviderForWallet(bestWallet);
+	}, []);
 
-	// Validate network (ensure we're on Ethereum mainnet)
+	// -------------------------------
+	// Validate Ethereum network (force Mainnet)
+	// -------------------------------
 	const validateNetwork = async (
 		ethereumProvider
 	) => {
@@ -61,34 +53,9 @@ export function useWallet() {
 					method: "eth_chainId",
 				});
 
-			// Ethereum mainnet chain ID is 0x1
 			if (chainId !== "0x1") {
-				// Try to switch to Ethereum mainnet with multiple RPC options
-				const rpcOptions = [
-					{
-						chainId: "0x1",
-						chainName: "Ethereum Mainnet",
-						nativeCurrency: {
-							name: "Ether",
-							symbol: "ETH",
-							decimals: 18,
-						},
-						rpcUrls: [
-							"https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
-							"https://ethereum.publicnode.com",
-							"https://rpc.ankr.com/eth",
-							"https://eth-mainnet.g.alchemy.com/v2/demo",
-							"https://cloudflare-eth.com",
-							"https://api.securerpc.com/v1",
-						],
-						blockExplorerUrls: [
-							"https://etherscan.io",
-						],
-					},
-				];
-
-				// Try to switch first
 				try {
+					// Try to switch first
 					await ethereumProvider.request({
 						method: "wallet_switchEthereumChain",
 						params: [{ chainId: "0x1" }],
@@ -96,38 +63,43 @@ export function useWallet() {
 					setNetwork("Ethereum Mainnet");
 					return true;
 				} catch (switchError) {
-					// If switch fails (chain not added), try to add it
 					if (switchError.code === 4902) {
-						// Try each RPC option until one works
-						for (const rpcOption of rpcOptions) {
-							try {
-								await ethereumProvider.request({
-									method:
-										"wallet_addEthereumChain",
-									params: [rpcOption],
-								});
-								setNetwork("Ethereum Mainnet");
-								console.log(
-									"Successfully added Ethereum mainnet with RPC:",
-									rpcOption.rpcUrls[0]
-								);
-								return true;
-							} catch (addError) {
-								console.log(
-									`Failed to add with RPC ${rpcOption.rpcUrls[0]}:`,
-									addError.message
-								);
-								continue; // Try next RPC option
-							}
+						// Try adding Ethereum Mainnet
+						try {
+							await ethereumProvider.request({
+								method: "wallet_addEthereumChain",
+								params: [
+									{
+										chainId: "0x1",
+										chainName: "Ethereum Mainnet",
+										nativeCurrency: {
+											name: "Ether",
+											symbol: "ETH",
+											decimals: 18,
+										},
+										rpcUrls: [
+											"https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
+											"https://ethereum.publicnode.com",
+											"https://rpc.ankr.com/eth",
+											"https://eth-mainnet.g.alchemy.com/v2/demo",
+											"https://cloudflare-eth.com",
+										],
+										blockExplorerUrls: [
+											"https://etherscan.io",
+										],
+									},
+								],
+							});
+							setNetwork("Ethereum Mainnet");
+							return true;
+						} catch {
+							throw new Error(
+								"Unable to add Ethereum mainnet. Please add it manually."
+							);
 						}
-
-						// If all RPC options fail, throw error
-						throw new Error(
-							"Unable to add Ethereum mainnet. Please add it manually to your wallet."
-						);
 					} else {
 						throw new Error(
-							"Please switch to Ethereum mainnet. Current network is not supported."
+							"Please switch to Ethereum mainnet."
 						);
 					}
 				}
@@ -135,31 +107,27 @@ export function useWallet() {
 
 			setNetwork("Ethereum Mainnet");
 			return true;
-		} catch (error) {
+		} catch (err) {
 			console.error(
 				"Network validation failed:",
-				error
+				err
 			);
 			setError(
 				"Network validation failed: " +
-					error.message
+					err.message
 			);
 			return false;
 		}
 	};
 
-	// Connect to wallet
+	// -------------------------------
+	// Connect Wallet
+	// -------------------------------
 	const connect = useCallback(async () => {
-		// Clear any previous errors
 		setError(null);
-
-		// Prevent multiple simultaneous connection attempts
-		if (isConnecting) {
-			return;
-		}
+		if (isConnecting) return;
 
 		const ethereumProvider = getProvider();
-
 		if (!ethereumProvider) {
 			setError(
 				"Please install a Web3 wallet to use this bridge!"
@@ -169,51 +137,42 @@ export function useWallet() {
 
 		setIsConnecting(true);
 		try {
-			// Get the best available wallet
-			const bestWallet = getBestAvailableWallet();
-			const walletName =
-				getWalletName(bestWallet);
-
-			// Validate wallet support first
 			const isWalletValid =
 				await validateWalletSupport(
 					ethereumProvider
 				);
 			if (!isWalletValid) {
 				setError(
-					"This wallet doesn't support the required features"
+					"This wallet doesn't support the required features."
 				);
 				return;
 			}
 
-			// Validate network
 			const isNetworkValid =
 				await validateNetwork(ethereumProvider);
-			if (!isNetworkValid) {
-				return;
-			}
+			if (!isNetworkValid) return;
 
-			// Check if already connected first
+			// Check existing connection
 			const currentAccounts =
 				await ethereumProvider.request({
 					method: "eth_accounts",
 				});
-
 			if (currentAccounts.length > 0) {
-				// Already connected, just update state
-				const ethersProvider =
+				setProvider(
 					new ethers.BrowserProvider(
 						ethereumProvider
-					);
-				setProvider(ethersProvider);
+					)
+				);
 				setAccount(currentAccounts[0]);
 				console.log(
-					`Already connected to ${walletName}`
+					`Already connected to ${getWalletName(
+						walletType
+					)}`
 				);
 				return;
 			}
 
-			// Request account access with timeout
+			// Request connection
 			const accounts = await Promise.race([
 				ethereumProvider.request({
 					method: "eth_requestAccounts",
@@ -230,86 +189,68 @@ export function useWallet() {
 			]);
 
 			if (accounts.length > 0) {
-				const ethersProvider =
+				setProvider(
 					new ethers.BrowserProvider(
 						ethereumProvider
-					);
-				setProvider(ethersProvider);
+					)
+				);
 				setAccount(accounts[0]);
 				console.log(
-					`Successfully connected to ${walletName}`
+					`Connected to ${getWalletName(
+						walletType
+					)}`
 				);
 			}
-		} catch (error) {
-			// Handle specific error cases
-			let errorMessage = error.message;
-			if (
-				error.message.includes(
-					"Already processing"
-				)
-			) {
-				errorMessage =
-					"Connection already in progress. Please wait a moment and try again.";
-			} else if (
-				error.message.includes("User rejected")
-			) {
-				errorMessage =
-					"Connection was rejected. Please approve the connection in your wallet.";
-			} else if (
-				error.message.includes("timeout")
-			) {
-				errorMessage =
+		} catch (err) {
+			let msg = err.message;
+			if (msg.includes("Already processing"))
+				msg =
+					"Connection already in progress. Please wait.";
+			if (msg.includes("User rejected"))
+				msg =
+					"Connection rejected. Please approve in your wallet.";
+			if (msg.includes("timeout"))
+				msg =
 					"Connection timed out. Please try again.";
-			} else if (
-				error.message.includes(
-					"Network validation failed"
-				)
-			) {
-				errorMessage = error.message;
-			}
 
 			setError(
-				"Failed to connect wallet: " +
-					errorMessage
+				"Failed to connect wallet: " + msg
 			);
 		} finally {
 			setIsConnecting(false);
 		}
-	}, [isConnecting]);
+	}, [isConnecting, getProvider, walletType]);
 
-	// Disconnect wallet
+	// -------------------------------
+	// Disconnect
+	// -------------------------------
 	const disconnect = useCallback(() => {
 		setAccount(null);
 		setProvider(null);
 		setNetwork(null);
 		setError(null);
+		setWalletType(null);
 	}, []);
 
-	// Handle account changes
+	// -------------------------------
+	// Handle wallet events
+	// -------------------------------
 	useEffect(() => {
 		const ethereumProvider = getProvider();
 		if (!ethereumProvider) return;
 
 		const handleAccountsChanged = (accounts) => {
-			if (accounts.length === 0) {
-				// Wallet is locked or the user has no accounts
-				disconnect();
-			} else if (accounts[0] !== account) {
+			if (accounts.length === 0) disconnect();
+			else if (accounts[0] !== account)
 				setAccount(accounts[0]);
-			}
 		};
 
 		const handleChainChanged = async () => {
-			// Validate the new network
-			const isNetworkValid =
-				await validateNetwork(ethereumProvider);
-			if (!isNetworkValid) {
-				disconnect();
-				return;
-			}
-
-			// Reload the page when chain changes to ensure everything is in sync
-			window.location.reload();
+			const valid = await validateNetwork(
+				ethereumProvider
+			);
+			if (!valid) disconnect();
+			else window.location.reload();
 		};
 
 		ethereumProvider.on(
@@ -331,59 +272,54 @@ export function useWallet() {
 				handleChainChanged
 			);
 		};
-	}, [account, disconnect]);
+	}, [account, disconnect, getProvider]);
 
+	// -------------------------------
 	// Auto-connect if already connected
+	// -------------------------------
 	useEffect(() => {
 		const autoConnect = async () => {
 			const ethereumProvider = getProvider();
-			if (!ethereumProvider) {
-				console.log("No wallet provider found");
-				return;
-			}
+			if (!ethereumProvider) return;
 
 			try {
-				// Check if already connected first (faster)
 				const accounts =
 					await ethereumProvider.request({
 						method: "eth_accounts",
 					});
-
 				if (accounts.length > 0) {
-					// Validate network after finding accounts
 					const isNetworkValid =
 						await validateNetwork(
 							ethereumProvider
 						);
-					if (!isNetworkValid) {
-						return;
-					}
+					if (!isNetworkValid) return;
 
-					const ethersProvider =
+					setProvider(
 						new ethers.BrowserProvider(
 							ethereumProvider
-						);
-					setProvider(ethersProvider);
+						)
+					);
 					setAccount(accounts[0]);
 				}
-			} catch (error) {
+			} catch (err) {
 				console.log(
 					"Auto-connect failed:",
-					error.message
+					err.message
 				);
 			}
 		};
 
-		// Add a small delay to ensure wallet is ready
 		const timer = setTimeout(autoConnect, 100);
 		return () => clearTimeout(timer);
-	}, []);
+	}, [getProvider]);
 
-	const bestWallet = getBestAvailableWallet();
+	// -------------------------------
+	// Wallet Info
+	// -------------------------------
 	const walletInfo = {
-		type: bestWallet,
-		name: getWalletName(bestWallet),
-		isInstalled: !!bestWallet,
+		type: walletType,
+		name: getWalletName(walletType),
+		isInstalled: !!walletType,
 	};
 
 	return {
@@ -396,10 +332,8 @@ export function useWallet() {
 		isConnecting,
 		walletType: walletInfo.type,
 		walletName: walletInfo.name,
-		bestWallet: bestWallet,
 		isTrustWalletInstalled:
-			checkTrustWalletInstalled(),
-		isWeb3WalletInstalled:
-			isWeb3WalletInstalled(),
+			isTrustWalletInstalled(),
+		isWeb3WalletInstalled: isAnyWalletInstalled(),
 	};
 }
