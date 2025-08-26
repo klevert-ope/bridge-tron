@@ -774,8 +774,13 @@ export function BridgeForm({
 				justify="center"
 				py="xl"
 			>
-				<Loader size="lg" />
-				<Text>Loading available tokens...</Text>
+				<Loader
+					size="lg"
+					color="#00ff88"
+				/>
+				<Text style={{ color: "#ffffff" }}>
+					Loading available tokens...
+				</Text>
 			</Group>
 		);
 	}
@@ -928,7 +933,7 @@ export function BridgeForm({
 									color: "#ffffff",
 								},
 								description: {
-									color: "#cccccc",
+									color: "#ffffff",
 								},
 							}}
 						/>
@@ -952,7 +957,7 @@ export function BridgeForm({
 									color: "#ffffff",
 								},
 								description: {
-									color: "#cccccc",
+									color: "#ffffff",
 								},
 							}}
 						>
@@ -1008,7 +1013,7 @@ export function BridgeForm({
 											<Text
 												size="xs"
 												style={{
-													color: "#cccccc",
+													color: "#ffffff",
 												}}
 											>
 												Getting quote...
@@ -1021,7 +1026,7 @@ export function BridgeForm({
 												<Text
 													size="xs"
 													style={{
-														color: "#cccccc",
+														color: "#ffffff",
 													}}
 												>
 													You will receive:
@@ -1067,7 +1072,7 @@ export function BridgeForm({
 														<Text
 															size="xs"
 															style={{
-																color: "#cccccc",
+																color: "#ffffff",
 															}}
 														>
 															(Original:{" "}
@@ -1089,7 +1094,7 @@ export function BridgeForm({
 												<Text
 													size="xs"
 													style={{
-														color: "#cccccc",
+														color: "#ffffff",
 													}}
 												>
 													Gas fee (
@@ -1140,7 +1145,7 @@ export function BridgeForm({
 													<Text
 														size="xs"
 														style={{
-															color: "#cccccc",
+															color: "#ffffff",
 														}}
 													>
 														Estimated time:
@@ -1165,7 +1170,7 @@ export function BridgeForm({
 												<Text
 													size="xs"
 													style={{
-														color: "#cccccc",
+														color: "#ffffff",
 													}}
 												>
 													Route:
@@ -1211,7 +1216,7 @@ export function BridgeForm({
 									<Group gap="xs">
 										<Text
 											size="xs"
-											style={{ color: "#cccccc" }}
+											style={{ color: "#ffffff" }}
 										>
 											Gas Fee:
 										</Text>
@@ -1234,7 +1239,7 @@ export function BridgeForm({
 											<Text
 												size="xs"
 												style={{
-													color: "#cccccc",
+													color: "#ffffff",
 												}}
 											>
 												Or pay with:

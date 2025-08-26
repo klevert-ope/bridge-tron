@@ -234,7 +234,7 @@ export function BridgeApp() {
 										Connect Your Wallet
 									</Title>
 									<Text
-										style={{ color: "#cccccc" }}
+										style={{ color: "#ffffff" }}
 										ta="center"
 									>
 										Please connect your wallet to

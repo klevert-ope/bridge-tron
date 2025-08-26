@@ -68,10 +68,23 @@ export function detectWalletType() {
 
 // Get wallet name for display
 export function getWalletName(walletType) {
+	if (!walletType) {
+		return "Web3 Wallet";
+	}
 	return (
 		WALLET_NAMES[walletType] ||
 		WALLET_NAMES[WALLET_TYPES.UNKNOWN]
 	);
+}
+
+// Get detected wallet info
+export function getDetectedWalletInfo() {
+	const walletType = detectWalletType();
+	return {
+		type: walletType,
+		name: getWalletName(walletType),
+		isInstalled: !!walletType,
+	};
 }
 
 // Check if any wallet is installed

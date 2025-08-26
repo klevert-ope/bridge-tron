@@ -105,7 +105,7 @@ export function BridgeStatus({ status }) {
 					<Group gap="xs">
 						<Text
 							size="sm"
-							c="dimmed"
+							style={{ color: "#ffffff" }}
 						>
 							Amount:
 						</Text>
@@ -120,7 +120,7 @@ export function BridgeStatus({ status }) {
 					<Group gap="xs">
 						<Text
 							size="sm"
-							c="dimmed"
+							style={{ color: "#ffffff" }}
 						>
 							To:
 						</Text>
@@ -135,7 +135,7 @@ export function BridgeStatus({ status }) {
 					<Group gap="xs">
 						<Text
 							size="sm"
-							c="dimmed"
+							style={{ color: "#ffffff" }}
 						>
 							Destination:
 						</Text>

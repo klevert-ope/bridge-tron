@@ -7,6 +7,7 @@ import { ethers } from "ethers";
 import {
 	detectWalletType,
 	getWalletName,
+	getDetectedWalletInfo,
 	isAnyWalletInstalled,
 	validateWalletSupport,
 	WALLET_TYPES,
@@ -19,8 +20,6 @@ export function useWallet() {
 	const [provider, setProvider] = useState(null);
 	const [network, setNetwork] = useState(null);
 	const [error, setError] = useState(null);
-	const [walletType, setWalletType] =
-		useState(null);
 
 	// Check if Trust Wallet is installed
 	const isTrustWalletInstalled = () => {
@@ -46,8 +45,6 @@ export function useWallet() {
 			return null;
 
 		if (window.ethereum) {
-			const detectedType = detectWalletType();
-			setWalletType(detectedType);
 			return window.ethereum;
 		}
 
@@ -100,13 +97,24 @@ export function useWallet() {
 
 		if (!ethereumProvider) {
 			setError(
-				"Please install Trust Wallet or another Web3 wallet to use this bridge!"
+				"Please install a Web3 wallet to use this bridge!"
 			);
 			return;
 		}
 
 		setIsConnecting(true);
 		try {
+			// Get wallet type for better user feedback
+			const detectedWalletType =
+				detectWalletType();
+			const walletName = getWalletName(
+				detectedWalletType
+			);
+
+			console.log(
+				`Attempting to connect to ${walletName}...`
+			);
+
 			// Validate wallet support first
 			const isWalletValid =
 				await validateWalletSupport(
@@ -140,6 +148,9 @@ export function useWallet() {
 					);
 				setProvider(ethersProvider);
 				setAccount(currentAccounts[0]);
+				console.log(
+					`Already connected to ${walletName}`
+				);
 				return;
 			}
 
@@ -166,8 +177,9 @@ export function useWallet() {
 					);
 				setProvider(ethersProvider);
 				setAccount(accounts[0]);
-
-				// Show success message
+				console.log(
+					`Successfully connected to ${walletName}`
+				);
 			}
 		} catch (error) {
 			// Handle specific error cases
@@ -266,37 +278,61 @@ export function useWallet() {
 	useEffect(() => {
 		const autoConnect = async () => {
 			const ethereumProvider = getProvider();
-			if (!ethereumProvider) return;
+			if (!ethereumProvider) {
+				console.log("No wallet provider found");
+				return;
+			}
+
+			const walletInfo = getDetectedWalletInfo();
+			console.log(
+				`Detected wallet: ${walletInfo.name}`
+			);
 
 			try {
-				// Validate network first
-				const isNetworkValid =
-					await validateNetwork(ethereumProvider);
-				if (!isNetworkValid) {
-					return;
-				}
-
-				// Check if already connected
+				// Check if already connected first (faster)
 				const accounts =
 					await ethereumProvider.request({
 						method: "eth_accounts",
 					});
 
 				if (accounts.length > 0) {
+					// Validate network after finding accounts
+					const isNetworkValid =
+						await validateNetwork(
+							ethereumProvider
+						);
+					if (!isNetworkValid) {
+						return;
+					}
+
 					const ethersProvider =
 						new ethers.BrowserProvider(
 							ethereumProvider
 						);
 					setProvider(ethersProvider);
 					setAccount(accounts[0]);
+					console.log(
+						`Auto-connected to ${walletInfo.name}`
+					);
+				} else {
+					console.log(
+						`Wallet ${walletInfo.name} found but not connected`
+					);
 				}
-			} catch {
-				// Auto-connect failed silently
+			} catch (error) {
+				console.log(
+					"Auto-connect failed:",
+					error.message
+				);
 			}
 		};
 
-		autoConnect();
+		// Add a small delay to ensure wallet is ready
+		const timer = setTimeout(autoConnect, 100);
+		return () => clearTimeout(timer);
 	}, []);
+
+	const walletInfo = getDetectedWalletInfo();
 
 	return {
 		account,
@@ -306,10 +342,8 @@ export function useWallet() {
 		connect,
 		disconnect,
 		isConnecting,
-		walletType,
-		walletName: walletType
-			? getWalletName(walletType)
-			: null,
+		walletType: walletInfo.type,
+		walletName: walletInfo.name,
 		isTrustWalletInstalled:
 			isTrustWalletInstalled(),
 		isWeb3WalletInstalled:

@@ -248,9 +248,9 @@ export function WalletConnector({
 						variant="light"
 						size="lg"
 						style={{
-							backgroundColor: "#0088ff",
+							backgroundColor: "#ff8800",
 							color: "#ffffff",
-							borderColor: "#0088ff",
+							borderColor: "#ff8800",
 						}}
 						onClick={() => setModalOpened(true)}
 					>
@@ -299,118 +299,36 @@ export function WalletConnector({
 							>
 								Please install a Web3 wallet to
 								use this bridge application. We
-								recommend one of the following:
+								recommend MetaMask:
 							</Text>
 						</Alert>
 
-						<SimpleGrid
-							cols={2}
-							spacing="sm"
+						<Button
+							variant="light"
+							onClick={() =>
+								window.open(
+									WALLET_INSTALL_URLS[
+										WALLET_TYPES.METAMASK
+									],
+									"_blank"
+								)
+							}
+							leftSection={
+								<span>
+									{getWalletIcon(
+										WALLET_TYPES.METAMASK
+									)}
+								</span>
+							}
+							size="lg"
+							style={{
+								backgroundColor: "#00ff88",
+								color: "#000000",
+								borderColor: "#00ff88",
+							}}
 						>
-							<Button
-								variant="light"
-								onClick={() =>
-									window.open(
-										WALLET_INSTALL_URLS[
-											WALLET_TYPES.METAMASK
-										],
-										"_blank"
-									)
-								}
-								leftSection={
-									<span>
-										{getWalletIcon(
-											WALLET_TYPES.METAMASK
-										)}
-									</span>
-								}
-								style={{
-									backgroundColor: "#00ff88",
-									color: "#000000",
-									borderColor: "#00ff88",
-								}}
-							>
-								MetaMask
-							</Button>
-
-							<Button
-								variant="light"
-								onClick={() =>
-									window.open(
-										WALLET_INSTALL_URLS[
-											WALLET_TYPES.TRUST_WALLET
-										],
-										"_blank"
-									)
-								}
-								leftSection={
-									<span>
-										{getWalletIcon(
-											WALLET_TYPES.TRUST_WALLET
-										)}
-									</span>
-								}
-								style={{
-									backgroundColor: "#0088ff",
-									color: "#ffffff",
-									borderColor: "#0088ff",
-								}}
-							>
-								Trust Wallet
-							</Button>
-
-							<Button
-								variant="light"
-								onClick={() =>
-									window.open(
-										WALLET_INSTALL_URLS[
-											WALLET_TYPES.EXODUS
-										],
-										"_blank"
-									)
-								}
-								leftSection={
-									<span>
-										{getWalletIcon(
-											WALLET_TYPES.EXODUS
-										)}
-									</span>
-								}
-								style={{
-									backgroundColor: "#ff8800",
-									color: "#ffffff",
-									borderColor: "#ff8800",
-								}}
-							>
-								Exodus
-							</Button>
-
-							<Button
-								variant="light"
-								onClick={() =>
-									window.open(
-										WALLET_INSTALL_URLS[
-											WALLET_TYPES.COINBASE
-										],
-										"_blank"
-									)
-								}
-								leftSection={
-									<span>
-										{getWalletIcon(
-											WALLET_TYPES.COINBASE
-										)}
-									</span>
-								}
-								style={{
-									backgroundColor: "#0052ff",
-									color: "#ffffff",
-									borderColor: "#0052ff",
-								}}
-							>
-								Coinbase
-							</Button>
-						</SimpleGrid>
+							Install MetaMask
+						</Button>
 					</Stack>
 				</Modal>
 			</>
@@ -461,7 +379,7 @@ export function WalletConnector({
 				<Stack gap="md">
 					<Text
 						size="sm"
-						style={{ color: "#cccccc" }}
+						style={{ color: "#ffffff" }}
 					>
 						Connect your{" "}
 						{walletName || "Web3 wallet"} to start
