@@ -6,8 +6,8 @@ import {
 import { ethers } from "ethers";
 import {
 	getWalletName,
-	getAllAvailableWallets,
 	getBestAvailableWallet,
+	getProviderForWallet,
 	isAnyWalletInstalled,
 	isTrustWalletInstalled,
 	validateWalletSupport,
@@ -38,6 +38,13 @@ export function useWallet() {
 			return null;
 
 		if (window.ethereum) {
+			// Get the best wallet type and use the correct provider for it
+			const bestWallet = getBestAvailableWallet();
+			if (bestWallet) {
+				const correctProvider =
+					getProviderForWallet(bestWallet);
+				return correctProvider;
+			}
 			return window.ethereum;
 		}
 
@@ -56,9 +63,74 @@ export function useWallet() {
 
 			// Ethereum mainnet chain ID is 0x1
 			if (chainId !== "0x1") {
-				throw new Error(
-					"Please switch to Ethereum mainnet. Current network is not supported."
-				);
+				// Try to switch to Ethereum mainnet with multiple RPC options
+				const rpcOptions = [
+					{
+						chainId: "0x1",
+						chainName: "Ethereum Mainnet",
+						nativeCurrency: {
+							name: "Ether",
+							symbol: "ETH",
+							decimals: 18,
+						},
+						rpcUrls: [
+							"https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
+							"https://ethereum.publicnode.com",
+							"https://rpc.ankr.com/eth",
+							"https://eth-mainnet.g.alchemy.com/v2/demo",
+							"https://cloudflare-eth.com",
+							"https://api.securerpc.com/v1",
+						],
+						blockExplorerUrls: [
+							"https://etherscan.io",
+						],
+					},
+				];
+
+				// Try to switch first
+				try {
+					await ethereumProvider.request({
+						method: "wallet_switchEthereumChain",
+						params: [{ chainId: "0x1" }],
+					});
+					setNetwork("Ethereum Mainnet");
+					return true;
+				} catch (switchError) {
+					// If switch fails (chain not added), try to add it
+					if (switchError.code === 4902) {
+						// Try each RPC option until one works
+						for (const rpcOption of rpcOptions) {
+							try {
+								await ethereumProvider.request({
+									method:
+										"wallet_addEthereumChain",
+									params: [rpcOption],
+								});
+								setNetwork("Ethereum Mainnet");
+								console.log(
+									"Successfully added Ethereum mainnet with RPC:",
+									rpcOption.rpcUrls[0]
+								);
+								return true;
+							} catch (addError) {
+								console.log(
+									`Failed to add with RPC ${rpcOption.rpcUrls[0]}:`,
+									addError.message
+								);
+								continue; // Try next RPC option
+							}
+						}
+
+						// If all RPC options fail, throw error
+						throw new Error(
+							"Unable to add Ethereum mainnet. Please add it manually to your wallet."
+						);
+					} else {
+						throw new Error(
+							"Please switch to Ethereum mainnet. Current network is not supported."
+						);
+					}
+				}
 			}
 
 			setNetwork("Ethereum Mainnet");
@@ -97,21 +169,10 @@ export function useWallet() {
 
 		setIsConnecting(true);
 		try {
-			// Get all available wallets and the best one
-			const allWallets = getAllAvailableWallets();
+			// Get the best available wallet
 			const bestWallet = getBestAvailableWallet();
 			const walletName =
 				getWalletName(bestWallet);
-
-			console.log(
-				`Available wallets: ${allWallets
-					.map((w) => getWalletName(w))
-					.join(", ")}`
-			);
-			console.log(`Best wallet: ${walletName}`);
-			console.log(
-				`Attempting to connect to ${walletName}...`
-			);
 
 			// Validate wallet support first
 			const isWalletValid =
@@ -281,29 +342,6 @@ export function useWallet() {
 				return;
 			}
 
-			// Get all available wallets and the best one
-			const allWallets = getAllAvailableWallets();
-			const bestWallet = getBestAvailableWallet();
-			const walletInfo = {
-				type: bestWallet,
-				name: getWalletName(bestWallet),
-				isInstalled: !!bestWallet,
-			};
-
-			console.log(
-				`Available wallets: ${allWallets
-					.map((w) => getWalletName(w))
-					.join(", ")}`
-			);
-			console.log(
-				`Best wallet: ${getWalletName(
-					bestWallet
-				)}`
-			);
-			console.log(
-				`Detected wallet: ${walletInfo.name}`
-			);
-
 			try {
 				// Check if already connected first (faster)
 				const accounts =
@@ -327,13 +365,6 @@ export function useWallet() {
 						);
 					setProvider(ethersProvider);
 					setAccount(accounts[0]);
-					console.log(
-						`Auto-connected to ${walletInfo.name}`
-					);
-				} else {
-					console.log(
-						`Wallet ${walletInfo.name} found but not connected`
-					);
 				}
 			} catch (error) {
 				console.log(
@@ -348,7 +379,6 @@ export function useWallet() {
 		return () => clearTimeout(timer);
 	}, []);
 
-	const allWallets = getAllAvailableWallets();
 	const bestWallet = getBestAvailableWallet();
 	const walletInfo = {
 		type: bestWallet,
@@ -366,7 +396,6 @@ export function useWallet() {
 		isConnecting,
 		walletType: walletInfo.type,
 		walletName: walletInfo.name,
-		allAvailableWallets: allWallets,
 		bestWallet: bestWallet,
 		isTrustWalletInstalled:
 			checkTrustWalletInstalled(),

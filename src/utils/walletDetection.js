@@ -535,3 +535,72 @@ export function getTronWalletStatus() {
 			null,
 	};
 }
+
+// Get the correct provider for a specific wallet type
+export function getProviderForWallet(walletType) {
+	if (
+		typeof window === "undefined" ||
+		!window.ethereum
+	) {
+		return null;
+	}
+
+	const ethereum = window.ethereum;
+
+	// If it's a single provider setup
+	if (
+		!ethereum.providers ||
+		ethereum.providers.length === 0
+	) {
+		return ethereum;
+	}
+
+	// For multi-provider setups, find the correct provider
+	switch (walletType) {
+		case WALLET_TYPES.TRUST_WALLET:
+			return (
+				ethereum.providers.find(
+					(p) =>
+						p.isTrust ||
+						p.trust ||
+						p.isTrustWallet
+				) || ethereum
+			);
+		case WALLET_TYPES.METAMASK:
+			return (
+				ethereum.providers.find(
+					(p) =>
+						p.isMetaMask &&
+						!p.isBraveWallet &&
+						!p.isCoinbaseWallet &&
+						!p.isTrust
+				) || ethereum
+			);
+		case WALLET_TYPES.BRAVE:
+			return (
+				ethereum.providers.find(
+					(p) => p.isBraveWallet
+				) || ethereum
+			);
+		case WALLET_TYPES.COINBASE:
+			return (
+				ethereum.providers.find(
+					(p) => p.isCoinbaseWallet
+				) || ethereum
+			);
+		case WALLET_TYPES.PHANTOM:
+			return (
+				ethereum.providers.find(
+					(p) => p.isPhantom
+				) || ethereum
+			);
+		case WALLET_TYPES.EXODUS:
+			return (
+				ethereum.providers.find(
+					(p) => p.isExodus
+				) || ethereum
+			);
+		default:
+			return ethereum;
+	}
+}
