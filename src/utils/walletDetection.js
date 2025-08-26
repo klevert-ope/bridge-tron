@@ -46,8 +46,12 @@ export function detectWalletType() {
 		return WALLET_TYPES.EXODUS;
 	}
 
-	// 3. Check for Trust Wallet
-	if (ethereum.isTrust) {
+	// 3. Check for Trust Wallet (multiple detection methods)
+	if (
+		ethereum.isTrust ||
+		ethereum.trust ||
+		ethereum.isTrustWallet
+	) {
 		return WALLET_TYPES.TRUST_WALLET;
 	}
 
@@ -68,6 +72,15 @@ export function detectWalletType() {
 			return WALLET_TYPES.BRAVE;
 		}
 
+		// Check for Trust Wallet by additional properties (prioritize Trust Wallet over MetaMask)
+		if (
+			ethereum.isTrust ||
+			ethereum.trust ||
+			ethereum.isTrustWallet
+		) {
+			return WALLET_TYPES.TRUST_WALLET;
+		}
+
 		// Check for Coinbase Wallet by additional properties
 		if (
 			ethereum.providers &&
@@ -82,11 +95,6 @@ export function detectWalletType() {
 			}
 		}
 
-		// Check for Trust Wallet by additional properties
-		if (ethereum.isTrust || ethereum.trust) {
-			return WALLET_TYPES.TRUST_WALLET;
-		}
-
 		return WALLET_TYPES.METAMASK;
 	}
 
@@ -97,12 +105,24 @@ export function detectWalletType() {
 	) {
 		// Find the first active provider
 		for (const provider of ethereum.providers) {
+			// Check for Trust Wallet first in providers
+			if (
+				provider.isTrust ||
+				provider.trust ||
+				provider.isTrustWallet
+			) {
+				return WALLET_TYPES.TRUST_WALLET;
+			}
 			if (provider.isMetaMask) {
 				if (provider.isBraveWallet)
 					return WALLET_TYPES.BRAVE;
 				if (provider.isCoinbaseWallet)
 					return WALLET_TYPES.COINBASE;
-				if (provider.isTrust)
+				if (
+					provider.isTrust ||
+					provider.trust ||
+					provider.isTrustWallet
+				)
 					return WALLET_TYPES.TRUST_WALLET;
 				return WALLET_TYPES.METAMASK;
 			}
@@ -225,10 +245,10 @@ export function getBestAvailableWallet() {
 	const availableWallets =
 		getAllAvailableWallets();
 
-	// Priority order: MetaMask, Trust Wallet, Coinbase, Brave, Exodus, Phantom
+	// Priority order: Trust Wallet first (since user is having issues), then MetaMask, Coinbase, Brave, Exodus, Phantom
 	const priorityOrder = [
-		WALLET_TYPES.METAMASK,
 		WALLET_TYPES.TRUST_WALLET,
+		WALLET_TYPES.METAMASK,
 		WALLET_TYPES.COINBASE,
 		WALLET_TYPES.BRAVE,
 		WALLET_TYPES.EXODUS,
@@ -270,6 +290,30 @@ export function isAnyWalletInstalled() {
 export function isWalletInstalled(walletType) {
 	const detectedType = detectWalletType();
 	return detectedType === walletType;
+}
+
+// Enhanced Trust Wallet detection
+export function isTrustWalletInstalled() {
+	if (
+		typeof window === "undefined" ||
+		!window.ethereum
+	) {
+		return false;
+	}
+
+	const ethereum = window.ethereum;
+
+	// Check multiple Trust Wallet identifiers
+	return !!(
+		ethereum.isTrust ||
+		ethereum.trust ||
+		ethereum.isTrustWallet ||
+		(ethereum.providers &&
+			ethereum.providers.some(
+				(p) =>
+					p.isTrust || p.trust || p.isTrustWallet
+			))
+	);
 }
 
 // Get wallet installation URLs

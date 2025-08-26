@@ -5,12 +5,11 @@ import {
 } from "react";
 import { ethers } from "ethers";
 import {
-	detectWalletType,
 	getWalletName,
-	getDetectedWalletInfo,
 	getAllAvailableWallets,
 	getBestAvailableWallet,
 	isAnyWalletInstalled,
+	isTrustWalletInstalled,
 	validateWalletSupport,
 	WALLET_TYPES,
 } from "../utils/walletDetection.js";
@@ -23,22 +22,14 @@ export function useWallet() {
 	const [network, setNetwork] = useState(null);
 	const [error, setError] = useState(null);
 
-	// Check if Trust Wallet is installed
-	const isTrustWalletInstalled = () => {
-		return isWalletInstalled(
-			WALLET_TYPES.TRUST_WALLET
-		);
+	// Check if Trust Wallet is installed - using enhanced detection
+	const checkTrustWalletInstalled = () => {
+		return isTrustWalletInstalled();
 	};
 
 	// Check if any Web3 wallet is installed
 	const isWeb3WalletInstalled = () => {
 		return isAnyWalletInstalled();
-	};
-
-	// Check if specific wallet is installed
-	const isWalletInstalled = (walletType) => {
-		const detectedType = detectWalletType();
-		return detectedType === walletType;
 	};
 
 	// Get the best available provider and detect wallet type
@@ -117,6 +108,7 @@ export function useWallet() {
 					.map((w) => getWalletName(w))
 					.join(", ")}`
 			);
+			console.log(`Best wallet: ${walletName}`);
 			console.log(
 				`Attempting to connect to ${walletName}...`
 			);
@@ -292,7 +284,11 @@ export function useWallet() {
 			// Get all available wallets and the best one
 			const allWallets = getAllAvailableWallets();
 			const bestWallet = getBestAvailableWallet();
-			const walletInfo = getDetectedWalletInfo();
+			const walletInfo = {
+				type: bestWallet,
+				name: getWalletName(bestWallet),
+				isInstalled: !!bestWallet,
+			};
 
 			console.log(
 				`Available wallets: ${allWallets
@@ -352,9 +348,13 @@ export function useWallet() {
 		return () => clearTimeout(timer);
 	}, []);
 
-	const walletInfo = getDetectedWalletInfo();
 	const allWallets = getAllAvailableWallets();
 	const bestWallet = getBestAvailableWallet();
+	const walletInfo = {
+		type: bestWallet,
+		name: getWalletName(bestWallet),
+		isInstalled: !!bestWallet,
+	};
 
 	return {
 		account,
@@ -369,7 +369,7 @@ export function useWallet() {
 		allAvailableWallets: allWallets,
 		bestWallet: bestWallet,
 		isTrustWalletInstalled:
-			isTrustWalletInstalled(),
+			checkTrustWalletInstalled(),
 		isWeb3WalletInstalled:
 			isWeb3WalletInstalled(),
 	};
