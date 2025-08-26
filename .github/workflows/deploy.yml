@@ -1,0 +1,38 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t bridge-tron .
+
+      - name: Login to Docker Hub
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Tag and push to Docker Hub
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          # Tag and push 'latest'
+          docker tag bridge-tron ${{ secrets.DOCKER_USERNAME }}/bridge-tron:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/bridge-tron:latest
+
+          # Tag and push commit SHA
+          docker tag bridge-tron ${{ secrets.DOCKER_USERNAME }}/bridge-tron:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/bridge-tron:${{ github.sha }}
