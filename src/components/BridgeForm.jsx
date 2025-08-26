@@ -952,16 +952,19 @@ export function BridgeForm({
 								);
 							}}
 							required
+							mb="md"
 							styles={{
 								label: {
 									color: "#ffffff",
+									marginBottom: "8px",
 								},
 								description: {
 									color: "#ffffff",
+									marginBottom: "16px",
 								},
 							}}
 						>
-							<Stack gap="md">
+							<Stack gap="lg">
 								<Radio
 									value="native"
 									label="Pay with ETH"
@@ -991,8 +994,8 @@ export function BridgeForm({
 								p="md"
 								withBorder
 								style={{
-									backgroundColor: "#001a00",
-									borderColor: "#00ff88",
+									backgroundColor: "#0a1a0a",
+									borderColor: "#1a4d1a",
 									color: "#ffffff",
 								}}
 							>
@@ -1000,7 +1003,7 @@ export function BridgeForm({
 									<Text
 										size="sm"
 										fw={500}
-										style={{ color: "#00ff88" }}
+										style={{ color: "#4dcc4d" }}
 									>
 										Bridge Quote
 									</Text>
@@ -1008,7 +1011,7 @@ export function BridgeForm({
 										<Group gap="xs">
 											<Loader
 												size="xs"
-												color="#00ff88"
+												color="#4dcc4d"
 											/>
 											<Text
 												size="xs"
@@ -1037,8 +1040,8 @@ export function BridgeForm({
 													size="lg"
 													style={{
 														backgroundColor:
-															"#00ff88",
-														color: "#000000",
+															"#2d662d",
+														color: "#ffffff",
 													}}
 												>
 													{form.values
@@ -1249,8 +1252,8 @@ export function BridgeForm({
 												color="green"
 												style={{
 													backgroundColor:
-														"#00ff88",
-													color: "#000000",
+														"#2d662d",
+													color: "#ffffff",
 												}}
 											>
 												{gasFee.stablecoin.float}{" "}
@@ -1276,10 +1279,10 @@ export function BridgeForm({
 									<IconArrowRight size="1rem" />
 								}
 								style={{
-									backgroundColor: "#00ff88",
-									color: "#000000",
+									backgroundColor: "#2d662d",
+									color: "#ffffff",
 									"&:hover": {
-										backgroundColor: "#00cc66",
+										backgroundColor: "#1a4d1a",
 									},
 									"&:disabled": {
 										backgroundColor: "#444444",
