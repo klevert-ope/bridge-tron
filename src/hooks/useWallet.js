@@ -8,6 +8,8 @@ import {
 	detectWalletType,
 	getWalletName,
 	getDetectedWalletInfo,
+	getAllAvailableWallets,
+	getBestAvailableWallet,
 	isAnyWalletInstalled,
 	validateWalletSupport,
 	WALLET_TYPES,
@@ -104,13 +106,17 @@ export function useWallet() {
 
 		setIsConnecting(true);
 		try {
-			// Get wallet type for better user feedback
-			const detectedWalletType =
-				detectWalletType();
-			const walletName = getWalletName(
-				detectedWalletType
-			);
+			// Get all available wallets and the best one
+			const allWallets = getAllAvailableWallets();
+			const bestWallet = getBestAvailableWallet();
+			const walletName =
+				getWalletName(bestWallet);
 
+			console.log(
+				`Available wallets: ${allWallets
+					.map((w) => getWalletName(w))
+					.join(", ")}`
+			);
 			console.log(
 				`Attempting to connect to ${walletName}...`
 			);
@@ -283,7 +289,21 @@ export function useWallet() {
 				return;
 			}
 
+			// Get all available wallets and the best one
+			const allWallets = getAllAvailableWallets();
+			const bestWallet = getBestAvailableWallet();
 			const walletInfo = getDetectedWalletInfo();
+
+			console.log(
+				`Available wallets: ${allWallets
+					.map((w) => getWalletName(w))
+					.join(", ")}`
+			);
+			console.log(
+				`Best wallet: ${getWalletName(
+					bestWallet
+				)}`
+			);
 			console.log(
 				`Detected wallet: ${walletInfo.name}`
 			);
@@ -333,6 +353,8 @@ export function useWallet() {
 	}, []);
 
 	const walletInfo = getDetectedWalletInfo();
+	const allWallets = getAllAvailableWallets();
+	const bestWallet = getBestAvailableWallet();
 
 	return {
 		account,
@@ -344,6 +366,8 @@ export function useWallet() {
 		isConnecting,
 		walletType: walletInfo.type,
 		walletName: walletInfo.name,
+		allAvailableWallets: allWallets,
+		bestWallet: bestWallet,
 		isTrustWalletInstalled:
 			isTrustWalletInstalled(),
 		isWeb3WalletInstalled:
