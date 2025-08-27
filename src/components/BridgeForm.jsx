@@ -30,23 +30,9 @@ import {
 	FeePaymentMethod,
 } from "@allbridge/bridge-core-sdk";
 
-// Helper function to send raw transactions (following official docs)
 const sendRawTransaction = async (
 	rawTransaction
 ) => {
-	// Detect mobile dApp browser environment
-	const isMobileDApp =
-		/Mobile|Android|iPhone|iPad/.test(
-			navigator.userAgent
-		) &&
-		(/TrustWallet|TWT|MetaMask|WalletConnect/.test(
-			navigator.userAgent
-		) ||
-			window.ethereum?.isMetaMask?.mobile ||
-			window.ethereum?.isTrust ||
-			window.ethereum?.isWalletConnect);
-
-	// Ensure the transaction has the correct format
 	const formattedTx = {
 		from: rawTransaction.from,
 		to: rawTransaction.to,
@@ -57,26 +43,12 @@ const sendRawTransaction = async (
 			  ).toString(16)}`
 			: "0x0",
 	};
+	const txHash = await window.ethereum.request({
+		method: "eth_sendTransaction",
+		params: [formattedTx],
+	});
 
-	// Add mobile dApp browser specific parameters
-	if (isMobileDApp) {
-		formattedTx.gasLimit = "0x186A0"; // 100k gas limit
-		formattedTx.maxFeePerGas = "0x59682f00"; // 1.5 gwei
-		formattedTx.maxPriorityFeePerGas =
-			"0x59682f00"; // 1.5 gwei
-	}
-
-	try {
-		const txHash = await window.ethereum.request({
-			method: "eth_sendTransaction",
-			params: [formattedTx],
-		});
-
-		return { transactionHash: txHash };
-	} catch (error) {
-		console.error("Transaction failed:", error);
-		throw error;
-	}
+	return { transactionHash: txHash };
 };
 
 export function BridgeForm({
@@ -92,8 +64,6 @@ export function BridgeForm({
 		useState(false);
 	const [needsApproval, setNeedsApproval] =
 		useState(false);
-	const [debugInfo, setDebugInfo] =
-		useState(null);
 
 	const [tokens, setTokens] = useState({
 		source: [],
@@ -218,19 +188,85 @@ export function BridgeForm({
 		}
 	}, [sdk]);
 
+	// Force complete state reset function
+	const forceStateReset = () => {
+		setQuote(null);
+		setGasFee(null);
+		setNeedsApproval(false);
+		setIsGettingQuote(false);
+		window.bridgeQuote = null;
+
+		// Clear any cached data
+		try {
+			if (window.bridgeQuote)
+				delete window.bridgeQuote;
+			if (window.lastQuote)
+				delete window.lastQuote;
+			if (window.lastGasFee)
+				delete window.lastGasFee;
+
+			// Clear storage
+			Object.keys(localStorage).forEach((key) => {
+				if (
+					key.includes("bridge") ||
+					key.includes("quote") ||
+					key.includes("gas")
+				) {
+					localStorage.removeItem(key);
+				}
+			});
+
+			Object.keys(sessionStorage).forEach(
+				(key) => {
+					if (
+						key.includes("bridge") ||
+						key.includes("quote") ||
+						key.includes("gas")
+					) {
+						sessionStorage.removeItem(key);
+					}
+				}
+			);
+		} catch (e) {
+			console.log(
+				"⚠️ Error during state reset:",
+				e
+			);
+		}
+	};
+
+	// Form reset function that also clears quote
+	const resetFormAndQuote = () => {
+		form.reset();
+		forceStateReset();
+
+		// Set default source token if available
+		if (tokens.source.length > 0) {
+			const tokenAddress =
+				tokens.source[0].tokenAddress ||
+				tokens.source[0].address;
+			form.setFieldValue(
+				"sourceToken",
+				tokenAddress
+			);
+		}
+	};
+
 	// Get quote function
 	const getQuote = async () => {
 		const {
 			sourceToken: tokenAddress,
 			amount,
 			destinationAddress,
+			gasFeePaymentMethod,
 		} = form.values;
 
 		if (
 			!tokenAddress ||
 			!amount ||
 			!destinationAddress ||
-			parseFloat(amount) <= 0
+			parseFloat(amount) <= 0 ||
+			!gasFeePaymentMethod
 		) {
 			setQuote(null);
 			window.bridgeQuote = null;
@@ -263,19 +299,36 @@ export function BridgeForm({
 					tokens.destination
 				);
 
-			const gasFeeOptions =
-				await sdk.getGasFeeOptions(
-					sourceToken,
-					tokens.destination,
-					Messenger.ALLBRIDGE
-				);
+			let gasFeeOptions;
+			let transferTimeMs;
 
-			const transferTimeMs =
-				sdk.getAverageTransferTime(
-					sourceToken,
-					tokens.destination,
-					Messenger.ALLBRIDGE
-				);
+			try {
+				gasFeeOptions =
+					await sdk.getGasFeeOptions(
+						sourceToken,
+						tokens.destination,
+						Messenger.ALLBRIDGE
+					);
+				transferTimeMs =
+					sdk.getAverageTransferTime(
+						sourceToken,
+						tokens.destination,
+						Messenger.ALLBRIDGE
+					);
+			} catch {
+				gasFeeOptions =
+					await sdk.getGasFeeOptions(
+						sourceToken,
+						tokens.destination,
+						Messenger.CCTP
+					);
+				transferTimeMs =
+					sdk.getAverageTransferTime(
+						sourceToken,
+						tokens.destination,
+						Messenger.CCTP
+					);
+			}
 
 			// Convert transfer time to human readable format
 			const transferTimeMinutes = Math.ceil(
@@ -298,6 +351,7 @@ export function BridgeForm({
 					transferTime: `${transferTimeMinutes} minutes`,
 					messenger: "Allbridge",
 					route: `${sourceToken.symbol} (Ethereum) → ${tokens.destination.symbol} (Tron)`,
+					paymentMethod: gasFeePaymentMethod,
 				},
 				provider: "allbridge",
 				sourceChain: ChainSymbol.ETH,
@@ -330,20 +384,52 @@ export function BridgeForm({
 
 	// Get quote when form values change
 	useEffect(() => {
-		getQuote();
-		// Reset approval state when form values change
+		// Only get quote if we have all required values
+		if (
+			form.values.sourceToken &&
+			form.values.amount &&
+			form.values.destinationAddress &&
+			form.values.gasFeePaymentMethod &&
+			parseFloat(form.values.amount) > 0
+		) {
+			getQuote();
+		} else {
+			setQuote(null);
+			window.bridgeQuote = null;
+		}
+
 		setNeedsApproval(false);
-		// Clear any cached transaction data when payment method changes
 		window.bridgeQuote = null;
+		setGasFee(null);
 	}, [
-		form.values.sourceToken,
-		form.values.amount,
-		form.values.destinationAddress,
-		form.values.gasFeePaymentMethod,
+		form.values,
 		tokens.source,
 		tokens.destination,
 		sdk,
 	]);
+
+	useEffect(() => {
+		if (
+			form.values.sourceToken &&
+			form.values.amount &&
+			account
+		) {
+			try {
+				// Clear any global variables that might be cached
+				if (window.bridgeQuote)
+					delete window.bridgeQuote;
+				if (window.lastQuote)
+					delete window.lastQuote;
+				if (window.lastGasFee)
+					delete window.lastGasFee;
+			} catch (e) {
+				console.log(
+					"⚠️ Could not clear global variables:",
+					e
+				);
+			}
+		}
+	}, [form.values.gasFeePaymentMethod, account]);
 
 	// Send tokens
 	const handleSend = async () => {
@@ -391,6 +477,41 @@ export function BridgeForm({
 
 			if (!sourceToken) {
 				throw new Error("Source token not found");
+			}
+
+			// Validate that we have a valid quote before proceeding
+			if (!quote || !quote.quote) {
+				console.warn(
+					"No valid quote available, getting fresh quote..."
+				);
+				await getQuote();
+				// Check if we have a valid quote after recalculation
+				if (!quote || !quote.quote) {
+					throw new Error(
+						"Failed to get valid quote. Please try again."
+					);
+				}
+			}
+
+			// Validate that the quote matches the current payment method
+			if (
+				quote &&
+				quote.quote?.paymentMethod !==
+					form.values.gasFeePaymentMethod
+			) {
+				console.warn(
+					"Quote payment method mismatch, recalculating..."
+				);
+				// Clear the quote and recalculate
+				setQuote(null);
+				window.bridgeQuote = null;
+				await getQuote();
+				// Check if we have a valid quote after recalculation
+				if (!quote || !quote.quote) {
+					throw new Error(
+						"Failed to get valid quote for selected payment method"
+					);
+				}
 			}
 
 			// Check token balance using ethers.js instead of web3
@@ -478,13 +599,37 @@ export function BridgeForm({
 			// Build bridge transaction
 			let bridgeRawTx = null;
 			try {
-				// Get gas fee options for the transaction
-				const gasFeeOptions =
-					await sdk.getGasFeeOptions(
-						sourceToken,
-						tokens.destination,
-						Messenger.ALLBRIDGE
+				// Force a fresh quote if we don't have one or if it's stale
+				if (
+					!quote ||
+					!quote.quote ||
+					quote.quote.paymentMethod !==
+						form.values.gasFeePaymentMethod
+				) {
+					await getQuote();
+
+					// Wait a moment for state to update
+					await new Promise((resolve) =>
+						setTimeout(resolve, 100)
 					);
+				}
+
+				let gasFeeOptions;
+				try {
+					gasFeeOptions =
+						await sdk.getGasFeeOptions(
+							sourceToken,
+							tokens.destination,
+							Messenger.ALLBRIDGE
+						);
+				} catch {
+					gasFeeOptions =
+						await sdk.getGasFeeOptions(
+							sourceToken,
+							tokens.destination,
+							Messenger.CCTP
+						);
+				}
 
 				// Prepare transaction parameters
 				const txParams = {
@@ -498,6 +643,17 @@ export function BridgeForm({
 						form.values.gasFeePaymentMethod,
 				};
 
+				const allbridgeSourceToken = {
+					...sourceToken,
+					bridgeAddress:
+						sourceToken.bridgeAddress,
+				};
+
+				// Use ALLBRIDGE messenger for Ethereum → Tron route
+				txParams.sourceToken =
+					allbridgeSourceToken;
+				txParams.messenger = Messenger.ALLBRIDGE; // Must use ALLBRIDGE for this route
+
 				// Add fee parameter if using stablecoin payment method
 				if (
 					form.values.gasFeePaymentMethod ===
@@ -507,49 +663,10 @@ export function BridgeForm({
 						gasFeeOptions.stablecoin?.int;
 				}
 
-				// Set debug info for mobile visibility
-				setDebugInfo({
-					environment: {
-						userAgent:
-							navigator.userAgent.substring(
-								0,
-								100
-							) + "...",
-						isMobile:
-							/Mobile|Android|iPhone|iPad/.test(
-								navigator.userAgent
-							),
-						isTrustWallet: /TrustWallet|TWT/.test(
-							navigator.userAgent
-						),
-						isMetaMask: /MetaMask/.test(
-							navigator.userAgent
-						),
-						ethereum: !!window.ethereum,
-						ethereumProvider:
-							window.ethereum?.constructor?.name,
-					},
-					paymentMethod:
-						form.values.gasFeePaymentMethod,
-					timestamp: new Date().toISOString(),
-				});
-
 				bridgeRawTx =
 					await sdk.bridge.rawTxBuilder.send(
 						txParams
 					);
-
-				// Update debug info with transaction result
-				setDebugInfo((prev) => ({
-					...prev,
-					transaction: {
-						to: bridgeRawTx.to,
-						value: bridgeRawTx.value,
-						dataLength: bridgeRawTx.data?.length,
-						paymentMethod:
-							form.values.gasFeePaymentMethod,
-					},
-				}));
 			} catch (txError) {
 				console.error(
 					"Failed to build bridge transaction:",
@@ -592,19 +709,29 @@ export function BridgeForm({
 				estimatedTime: quote?.quote?.transferTime,
 				route: quote?.quote?.route,
 			});
+
+			// Reset form after successful transaction
+			resetFormAndQuote();
 		} catch (error) {
-			console.error("Transfer failed:", error);
-			console.error("Error details:", {
-				code: error.code,
-				message: error.message,
-				data: error.data,
-			});
+			console.error(
+				"Bridge transfer failed:",
+				error
+			);
 
 			// Provide more specific error messages
 			let errorMessage = error.message;
 			if (error.code === 4001) {
 				errorMessage =
 					"Transaction was rejected by user";
+
+				// Clear states when user rejects transaction
+				setQuote(null);
+				setGasFee(null);
+				setNeedsApproval(false);
+				window.bridgeQuote = null;
+
+				// Reset form after transaction rejection
+				resetFormAndQuote();
 			} else if (error.code === -32603) {
 				if (
 					error.message.includes(
@@ -648,6 +775,9 @@ export function BridgeForm({
 				message: errorMessage,
 				color: "red",
 			});
+
+			// Reset form for any transaction failure to prevent stale state
+			resetFormAndQuote();
 		} finally {
 			setIsLoading(false);
 		}
@@ -684,7 +814,6 @@ export function BridgeForm({
 			});
 			return;
 		}
-
 		setIsApproving(true);
 		try {
 			// Build approval transaction (following official docs)
@@ -693,7 +822,6 @@ export function BridgeForm({
 					token: sourceToken,
 					owner: account,
 				});
-
 			// Send approval transaction (following official docs)
 			const approveTxReceipt =
 				await sendRawTransaction(approveRawTx);
@@ -706,6 +834,9 @@ export function BridgeForm({
 
 			// Reset approval state
 			setNeedsApproval(false);
+
+			// Reset form after successful approval
+			resetFormAndQuote();
 		} catch (error) {
 			console.error("Approval failed:", error);
 			notifications.show({
@@ -713,12 +844,29 @@ export function BridgeForm({
 				message: error.message,
 				color: "red",
 			});
+
+			// Reset form after approval failure
+			resetFormAndQuote();
 		} finally {
 			setIsApproving(false);
 		}
 	};
 
 	const handleSubmit = async () => {
+		// Check if we have a valid quote before proceeding
+		if (!quote || !quote.quote) {
+			console.warn(
+				"❌ No valid quote available, cannot proceed"
+			);
+			notifications.show({
+				title: "Quote Required",
+				message:
+					"Please wait for the quote to be calculated before proceeding",
+				color: "yellow",
+			});
+			return;
+		}
+
 		// Get the source token
 		const sourceToken = tokens.source.find(
 			(token) => {
@@ -951,10 +1099,85 @@ export function BridgeForm({
 								form.values.gasFeePaymentMethod
 							}
 							onChange={(value) => {
+								// Prevent rapid switching to avoid contract conflicts
+								if (isLoading || isApproving) {
+									notifications.show({
+										title: "Please Wait",
+										message:
+											"Please wait for the current operation to complete",
+										color: "yellow",
+									});
+									return;
+								}
+
+								// Only clear quote-related state, preserve form values
+								forceStateReset();
+
+								// Clear any cached SDK data
+								if (sdk && sdk.clearCache) {
+									try {
+										sdk.clearCache();
+									} catch (e) {
+										console.log(
+											"⚠️ Could not clear SDK cache:",
+											e
+										);
+									}
+								}
+
+								// Clear any localStorage or sessionStorage that might contain cached data
+								try {
+									Object.keys(
+										localStorage
+									).forEach((key) => {
+										if (
+											key.includes("bridge") ||
+											key.includes("quote") ||
+											key.includes("gas")
+										) {
+											localStorage.removeItem(
+												key
+											);
+										}
+									});
+
+									Object.keys(
+										sessionStorage
+									).forEach((key) => {
+										if (
+											key.includes("bridge") ||
+											key.includes("quote") ||
+											key.includes("gas")
+										) {
+											sessionStorage.removeItem(
+												key
+											);
+										}
+									});
+								} catch (e) {
+									console.log(
+										"⚠️ Could not clear storage:",
+										e
+									);
+								}
+
+								// Update form value
 								form.setFieldValue(
 									"gasFeePaymentMethod",
 									value
 								);
+
+								// Show notification about recalculation
+								notifications.show({
+									title: "Payment Method Changed",
+									message: `Recalculating quote for ${
+										value ===
+										FeePaymentMethod.WITH_NATIVE_CURRENCY
+											? "ETH"
+											: "USDT"
+									} payment.`,
+									color: "blue",
+								});
 							}}
 							required
 							mb="md"
@@ -1270,99 +1493,6 @@ export function BridgeForm({
 											</Badge>
 										</Group>
 									)}
-								</Stack>
-							</Paper>
-						)}
-
-						{/* Debug Panel for Mobile */}
-						{debugInfo && (
-							<Paper
-								p="md"
-								withBorder
-								style={{
-									backgroundColor: "#1a1a1a",
-									borderColor: "#444444",
-									color: "#ffffff",
-								}}
-							>
-								<Stack gap="xs">
-									<Text
-										size="sm"
-										fw={500}
-										style={{ color: "#00ff88" }}
-									>
-										Debug Info (Mobile)
-									</Text>
-									<Text
-										size="xs"
-										style={{ color: "#cccccc" }}
-									>
-										Environment:{" "}
-										{debugInfo.environment
-											.isMobile
-											? "Mobile"
-											: "Desktop"}
-										{debugInfo.environment
-											.isTrustWallet &&
-											" (Trust Wallet)"}
-										{debugInfo.environment
-											.isMetaMask &&
-											" (MetaMask)"}
-									</Text>
-									<Text
-										size="xs"
-										style={{ color: "#cccccc" }}
-									>
-										Payment:{" "}
-										{debugInfo.paymentMethod}
-									</Text>
-									{debugInfo.transaction && (
-										<>
-											<Text
-												size="xs"
-												style={{
-													color: "#cccccc",
-												}}
-											>
-												To:{" "}
-												{debugInfo.transaction.to?.substring(
-													0,
-													20
-												)}
-												...
-											</Text>
-											<Text
-												size="xs"
-												style={{
-													color: "#cccccc",
-												}}
-											>
-												Value:{" "}
-												{
-													debugInfo.transaction
-														.value
-												}
-											</Text>
-											<Text
-												size="xs"
-												style={{
-													color: "#cccccc",
-												}}
-											>
-												Data Length:{" "}
-												{
-													debugInfo.transaction
-														.dataLength
-												}
-											</Text>
-										</>
-									)}
-									<Text
-										size="xs"
-										style={{ color: "#888888" }}
-									>
-										{debugInfo.timestamp}
-									</Text>
 								</Stack>
 							</Paper>
 						)}

@@ -11,7 +11,6 @@ import {
 	isAnyWalletInstalled,
 	isTrustWalletInstalled,
 	validateWalletSupport,
-	WALLET_TYPES,
 } from "../utils/walletDetection.js";
 
 export function useWallet() {
@@ -164,11 +163,7 @@ export function useWallet() {
 					)
 				);
 				setAccount(currentAccounts[0]);
-				console.log(
-					`Already connected to ${getWalletName(
-						walletType
-					)}`
-				);
+
 				return;
 			}
 
@@ -195,11 +190,6 @@ export function useWallet() {
 					)
 				);
 				setAccount(accounts[0]);
-				console.log(
-					`Connected to ${getWalletName(
-						walletType
-					)}`
-				);
 			}
 		} catch (err) {
 			let msg = err.message;
