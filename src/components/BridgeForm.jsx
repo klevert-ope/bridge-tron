@@ -29,6 +29,29 @@ import {
 	Messenger,
 } from "@allbridge/bridge-core-sdk";
 
+// Helper function to send raw transactions (following official docs)
+const sendRawTransaction = async (
+	rawTransaction
+) => {
+	// Ensure the transaction has the correct format
+	const formattedTx = {
+		from: rawTransaction.from,
+		to: rawTransaction.to,
+		data: rawTransaction.data,
+		value: rawTransaction.value
+			? `0x${parseInt(
+					rawTransaction.value
+			  ).toString(16)}`
+			: "0x0",
+	};
+
+	const txHash = await window.ethereum.request({
+		method: "eth_sendTransaction",
+		params: [formattedTx],
+	});
+	return { transactionHash: txHash };
+};
+
 export function BridgeForm({
 	sdk,
 	account,
@@ -37,6 +60,10 @@ export function BridgeForm({
 	const [isLoading, setIsLoading] =
 		useState(false);
 	const [isLoadingTokens, setIsLoadingTokens] =
+		useState(false);
+	const [isApproving, setIsApproving] =
+		useState(false);
+	const [needsApproval, setNeedsApproval] =
 		useState(false);
 	const [tokens, setTokens] = useState({
 		source: [],
@@ -259,6 +286,8 @@ export function BridgeForm({
 	// Get quote when form values change
 	useEffect(() => {
 		getQuote();
+		// Reset approval state when form values change
+		setNeedsApproval(false);
 	}, [
 		form.values.sourceToken,
 		form.values.amount,
@@ -280,16 +309,30 @@ export function BridgeForm({
 			!amount ||
 			!destinationAddress
 		) {
-			console.log("Missing form values:", {
-				tokenAddress,
-				amount,
-				destinationAddress,
-			});
 			return;
 		}
 
 		setIsLoading(true);
 		try {
+			// Check if wallet is connected
+			if (!window.ethereum) {
+				throw new Error(
+					"No wallet detected. Please install MetaMask or another wallet."
+				);
+			}
+
+			// Check if we're on Ethereum mainnet
+			const chainId =
+				await window.ethereum.request({
+					method: "eth_chainId",
+				});
+
+			if (chainId !== "0x1") {
+				throw new Error(
+					"Please switch to Ethereum mainnet to use this bridge."
+				);
+			}
+
 			if (
 				!tokens.source ||
 				tokens.source.length === 0
@@ -310,83 +353,95 @@ export function BridgeForm({
 				}
 			);
 
-			// Check ETH balance against gas fees + bridge fees and build raw transaction
-			let bridgeRawTx = null;
-			let GAS_PRICE; // Declare GAS_PRICE at function level
+			if (!sourceToken) {
+				throw new Error("Source token not found");
+			}
+
+			// Check token balance using ethers.js instead of web3
 			try {
-				// Get ETH balance with better error handling
-				let ethBalance;
-				try {
-					ethBalance =
-						await window.ethereum.request({
-							method: "eth_getBalance",
-							params: [account, "latest"],
-						});
-				} catch (balanceError) {
-					console.error(
-						"Failed to get ETH balance from wallet:",
-						balanceError
-					);
-					// Try alternative method
-					try {
-						ethBalance =
-							await window.ethereum.request({
-								method: "eth_getBalance",
-								params: [account],
-							});
-					} catch (altError) {
-						console.error(
-							"Alternative balance check failed:",
-							altError
+				// Use ethers.js if available, otherwise skip balance check
+				if (window.ethers) {
+					const provider =
+						new window.ethers.BrowserProvider(
+							window.ethereum
 						);
-						throw new Error(
-							"Could not read ETH balance from wallet"
+					const tokenContract =
+						new window.ethers.Contract(
+							sourceToken.tokenAddress ||
+								sourceToken.address,
+							[
+								{
+									constant: true,
+									inputs: [
+										{
+											name: "_owner",
+											type: "address",
+										},
+									],
+									name: "balanceOf",
+									outputs: [
+										{
+											name: "balance",
+											type: "uint256",
+										},
+									],
+									type: "function",
+								},
+							],
+							provider
 						);
-					}
-				}
 
-				// Convert hex balance to ETH
-				let ethBalanceInEth = 0;
-				if (ethBalance && ethBalance !== "0x") {
-					// Handle hex string
+					const balance =
+						await tokenContract.balanceOf(
+							account
+						);
+					const balanceInTokens =
+						parseFloat(balance) /
+						Math.pow(
+							10,
+							sourceToken.decimals || 6
+						);
+
 					if (
-						typeof ethBalance === "string" &&
-						ethBalance.startsWith("0x")
+						balanceInTokens < parseFloat(amount)
 					) {
-						ethBalanceInEth =
-							parseInt(ethBalance, 16) /
-							Math.pow(10, 18);
-					} else {
-						// Handle decimal string
-						ethBalanceInEth =
-							parseFloat(ethBalance) /
-							Math.pow(10, 18);
+						throw new Error(
+							`Insufficient ${
+								sourceToken.symbol
+							} balance. You have ${balanceInTokens.toFixed(
+								6
+							)} but need ${amount}`
+						);
 					}
 				}
+			} catch {
+				// Continue anyway, the transaction will fail if balance is insufficient
+			}
 
-				const gasFeeOptions =
-					await sdk.getGasFeeOptions(
-						sourceToken,
-						tokens.destination,
-						Messenger.ALLBRIDGE
-					);
+			// Check if approval is needed first (following official docs)
+			const allowanceCheck =
+				await sdk.bridge.checkAllowance({
+					token: sourceToken,
+					owner: account,
+					gasFeePaymentMethod:
+						form.values.gasFeePaymentMethod,
+					amount: amount,
+				});
 
-				let totalFeeInEth = 0;
-				if (
-					gasFeeOptions &&
-					gasFeeOptions.native
-				) {
-					const rawFee =
-						gasFeeOptions.native.float ||
-						gasFeeOptions.native.int ||
-						0;
-					totalFeeInEth = parseFloat(rawFee);
-					console.log(
-						"Total fee from SDK:",
-						totalFeeInEth
-					);
-				}
+			if (!allowanceCheck) {
+				setNeedsApproval(true);
+				notifications.show({
+					title: "Approval Required",
+					message:
+						"Please approve the bridge to spend your tokens first",
+					color: "yellow",
+				});
+				return;
+			}
 
+			// Build bridge transaction
+			let bridgeRawTx = null;
+			try {
 				bridgeRawTx =
 					await sdk.bridge.rawTxBuilder.send({
 						amount: amount,
@@ -398,243 +453,27 @@ export function BridgeForm({
 						gasFeePaymentMethod:
 							form.values.gasFeePaymentMethod,
 					});
-
-				// Calculate requirements based on payment method
-				let totalEthRequired,
-					requiredEthWithBuffer;
-				let balanceCheckMessage,
-					balanceCheckTitle;
-				let insufficientBalance = false;
-
-				if (
-					form.values.gasFeePaymentMethod ===
-					"native"
-				) {
-					// Pay with ETH
-					totalEthRequired = totalFeeInEth;
-					requiredEthWithBuffer =
-						totalEthRequired * 1.2;
-
-					// Check if ETH balance is sufficient
-					if (
-						ethBalanceInEth <
-						requiredEthWithBuffer
-					) {
-						insufficientBalance = true;
-						balanceCheckTitle =
-							"Insufficient ETH";
-						balanceCheckMessage = `You have ${ethBalanceInEth.toFixed(
-							4
-						)} ETH, but need approximately ${requiredEthWithBuffer.toFixed(
-							6
-						)} ETH (including buffer).`;
-					} else {
-						balanceCheckTitle =
-							"ETH Balance Sufficient";
-						balanceCheckMessage = `You have ${ethBalanceInEth.toFixed(
-							4
-						)} ETH available. Fee required: ${totalEthRequired.toFixed(
-							6
-						)} ETH`;
-					}
-				} else {
-					// Pay with stablecoin (USDT) - still need minimal ETH for gas
-					totalEthRequired = 0.001; // Minimum ETH needed for gas even when paying with USDT
-					requiredEthWithBuffer =
-						totalEthRequired * 1.2;
-
-					if (
-						ethBalanceInEth <
-						requiredEthWithBuffer
-					) {
-						insufficientBalance = true;
-						balanceCheckTitle =
-							"Insufficient ETH";
-						balanceCheckMessage = `You have ${ethBalanceInEth.toFixed(
-							4
-						)} ETH, but need at least ${requiredEthWithBuffer.toFixed(
-							6
-						)} ETH for gas fees (even when paying with USDT).`;
-					} else {
-						balanceCheckTitle =
-							"Balance Sufficient";
-						balanceCheckMessage = `You have ${ethBalanceInEth.toFixed(
-							4
-						)} ETH available. Gas fees will be paid with USDT.`;
-					}
-				}
-
-				// Show balance check notification and stop if insufficient
-				if (insufficientBalance) {
-					notifications.show({
-						title: balanceCheckTitle,
-						message: balanceCheckMessage,
-						color: "red",
-					});
-					return; // Stop the transaction
-				} else {
-					notifications.show({
-						title: balanceCheckTitle,
-						message: balanceCheckMessage,
-						color: "green",
-					});
-				}
-			} catch (balanceError) {
-				console.log(
-					"Could not check ETH balance:",
-					balanceError
-				);
-				notifications.show({
-					title: "Balance Check Failed",
-					message:
-						"Could not verify ETH balance. Please ensure you have enough ETH for gas fees and bridge fees.",
-					color: "yellow",
-				});
-			}
-
-			// Check if SDK is properly initialized
-			if (
-				!sdk ||
-				!sdk.bridge ||
-				!sdk.bridge.rawTxBuilder
-			) {
+			} catch (txError) {
 				throw new Error(
-					"Bridge SDK not properly initialized. Please refresh the page and try again."
+					`Failed to build transaction: ${txError.message}`
 				);
 			}
 
-			// Check if all required parameters are valid
-			if (!amount || parseFloat(amount) <= 0) {
-				throw new Error(
-					"Invalid amount: " + amount
-				);
-			}
-			if (!account || !account.startsWith("0x")) {
-				throw new Error(
-					"Invalid from account: " + account
-				);
-			}
-			if (
-				!destinationAddress ||
-				!destinationAddress.startsWith("T")
-			) {
-				throw new Error(
-					"Invalid destination address: " +
-						destinationAddress
-				);
-			}
-			if (
-				!sourceToken ||
-				!sourceToken.tokenAddress
-			) {
-				throw new Error(
-					"Invalid source token: " +
-						JSON.stringify(sourceToken)
-				);
-			}
-			if (
-				!tokens.destination ||
-				!tokens.destination.tokenAddress
-			) {
-				throw new Error(
-					"Invalid destination token: " +
-						JSON.stringify(tokens.destination)
-				);
-			}
-
-			// Validate the raw transaction for token bridge
+			// Basic validation
 			if (!bridgeRawTx) {
 				throw new Error(
-					"Raw transaction not available - SDK failed to build transaction"
+					"Failed to build bridge transaction"
 				);
 			}
 
-			console.log("Validating raw transaction:", {
-				hasTo: !!bridgeRawTx.to,
-				hasData: !!bridgeRawTx.data,
-				hasValue: !!bridgeRawTx.value,
-				to: bridgeRawTx.to,
-				dataLength: bridgeRawTx.data?.length,
-				value: bridgeRawTx.value,
-			});
-
-			if (!bridgeRawTx.to) {
-				throw new Error(
-					"Raw transaction missing 'to' address - SDK error"
-				);
-			}
-			if (!bridgeRawTx.data) {
-				throw new Error(
-					"Raw transaction missing 'data' - SDK error"
-				);
-			}
-
-			// For Allbridge, the transaction value includes the bridge fee
-			if (
-				bridgeRawTx.value &&
-				bridgeRawTx.value !== "0x0" &&
-				bridgeRawTx.value !== "0"
-			) {
-				const ethValue =
-					parseFloat(bridgeRawTx.value) /
-					Math.pow(10, 18);
-				console.log(
-					"💰 Bridge fee in ETH:",
-					ethValue,
-					"ETH"
-				);
-			} else {
-				console.log(
-					"✅ Transaction value is 0x0 (no bridge fee)"
-				);
-			}
-
-			// Validate this is a token bridge transaction
-			if (
-				!bridgeRawTx.data ||
-				bridgeRawTx.data.length < 10
-			) {
-				throw new Error(
-					"Transaction data too short for token bridge"
-				);
-			}
-
-			// Check if this looks like a contract call (should start with function selector)
-			if (!bridgeRawTx.data.startsWith("0x")) {
-				throw new Error(
-					"Transaction data should start with 0x"
-				);
-			}
-
-			// Ensure transaction value is properly formatted as hex string
-			let formattedValue = bridgeRawTx.value;
-			if (
-				formattedValue &&
-				!formattedValue.startsWith("0x")
-			) {
-				// Convert decimal string to hex
-				formattedValue =
-					"0x" +
-					parseInt(formattedValue).toString(16);
-			}
-
-			// Add gas price to the transaction (let wallet handle gas limit)
-			const transactionWithGas = {
-				...bridgeRawTx,
-				value: formattedValue, // Use properly formatted value
-				gasPrice: GAS_PRICE, // Gas price for bridge transaction
-			};
-
-			// Send transaction
-			const txHash =
-				await window.ethereum.request({
-					method: "eth_sendTransaction",
-					params: [transactionWithGas],
-				});
+			// Send bridge transaction (following official docs)
+			const txReceipt = await sendRawTransaction(
+				bridgeRawTx
+			);
 
 			notifications.show({
 				title: "Transfer Initiated",
-				message: `Transaction hash: ${txHash}`,
+				message: `Transaction hash: ${txReceipt.transactionHash}`,
 				color: "green",
 				icon: <IconSend size="1rem" />,
 			});
@@ -642,7 +481,7 @@ export function BridgeForm({
 			// Update transfer status with quote information
 			onTransferStatus({
 				status: "pending",
-				txHash,
+				txHash: txReceipt.transactionHash,
 				amount,
 				sourceToken: sourceToken.symbol,
 				destinationToken:
@@ -710,6 +549,71 @@ export function BridgeForm({
 			});
 		} finally {
 			setIsLoading(false);
+		}
+	};
+
+	// Handle approval
+	const handleApproval = async () => {
+		const { sourceToken: tokenAddress, amount } =
+			form.values;
+
+		if (!tokenAddress || !amount) {
+			notifications.show({
+				title: "Error",
+				message:
+					"Please fill in token and amount first",
+				color: "red",
+			});
+			return;
+		}
+
+		const sourceToken = tokens.source.find(
+			(token) => {
+				const tokenAddr =
+					token.tokenAddress || token.address;
+				return tokenAddr === tokenAddress;
+			}
+		);
+
+		if (!sourceToken) {
+			notifications.show({
+				title: "Error",
+				message: "Source token not found",
+				color: "red",
+			});
+			return;
+		}
+
+		setIsApproving(true);
+		try {
+			// Build approval transaction (following official docs)
+			const approveRawTx =
+				await sdk.bridge.rawTxBuilder.approve({
+					token: sourceToken,
+					owner: account,
+				});
+
+			// Send approval transaction (following official docs)
+			const approveTxReceipt =
+				await sendRawTransaction(approveRawTx);
+
+			notifications.show({
+				title: "Approval Sent",
+				message: `Approval transaction hash: ${approveTxReceipt.transactionHash}`,
+				color: "blue",
+			});
+
+			// Reset approval state
+			setNeedsApproval(false);
+		} catch (error) {
+			console.error("Approval failed:", error);
+			notifications.show({
+				title: "Approval Failed",
+				message: error.message,
+				color: "red",
+			});
+		} finally {
+			setIsApproving(false);
 		}
 	};
 
@@ -1270,30 +1174,57 @@ export function BridgeForm({
 							justify="center"
 							mt="md"
 						>
-							<Button
-								type="submit"
-								size="lg"
-								loading={isLoading}
-								disabled={!form.isValid()}
-								leftSection={
-									<IconArrowRight size="1rem" />
-								}
-								style={{
-									backgroundColor: "#2d662d",
-									color: "#ffffff",
-									"&:hover": {
-										backgroundColor: "#1a4d1a",
-									},
-									"&:disabled": {
-										backgroundColor: "#444444",
-										color: "#888888",
-									},
-								}}
-							>
-								{isLoading
-									? "Sending..."
-									: "Bridge Tokens"}
-							</Button>
+							{needsApproval ? (
+								<Button
+									onClick={handleApproval}
+									size="lg"
+									loading={isApproving}
+									disabled={!form.isValid()}
+									leftSection={
+										<IconWallet size="1rem" />
+									}
+									style={{
+										backgroundColor: "#ff8800",
+										color: "#ffffff",
+										"&:hover": {
+											backgroundColor: "#cc6600",
+										},
+										"&:disabled": {
+											backgroundColor: "#444444",
+											color: "#888888",
+										},
+									}}
+								>
+									{isApproving
+										? "Approving..."
+										: "Approve Tokens"}
+								</Button>
+							) : (
+								<Button
+									type="submit"
+									size="lg"
+									loading={isLoading}
+									disabled={!form.isValid()}
+									leftSection={
+										<IconArrowRight size="1rem" />
+									}
+									style={{
+										backgroundColor: "#2d662d",
+										color: "#ffffff",
+										"&:hover": {
+											backgroundColor: "#1a4d1a",
+										},
+										"&:disabled": {
+											backgroundColor: "#444444",
+											color: "#888888",
+										},
+									}}
+								>
+									{isLoading
+										? "Sending..."
+										: "Bridge Tokens"}
+								</Button>
+							)}
 						</Group>
 					</Stack>
 				</form>

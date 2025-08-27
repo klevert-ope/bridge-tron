@@ -42,7 +42,7 @@ export function BridgeApp() {
 		sdk,
 		isLoading: sdkLoading,
 		error: sdkError,
-	} = useBridgeSDK(provider);
+	} = useBridgeSDK();
 	const [transferStatus, setTransferStatus] =
 		useState(null);
 
