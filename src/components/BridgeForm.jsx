@@ -65,6 +65,10 @@ export function BridgeForm({
 		useState(false);
 	const [needsApproval, setNeedsApproval] =
 		useState(false);
+	const [wrongNetwork, setWrongNetwork] =
+		useState(false);
+	const [currentChainId, setCurrentChainId] =
+		useState(null);
 	const [tokens, setTokens] = useState({
 		source: [],
 		destination: null,
@@ -283,6 +287,70 @@ export function BridgeForm({
 		}
 	};
 
+	// Helper function to switch to Ethereum mainnet
+	const switchToEthereumMainnet = async () => {
+		try {
+			await window.ethereum.request({
+				method: "wallet_switchEthereumChain",
+				params: [{ chainId: "0x1" }],
+			});
+			setWrongNetwork(false);
+			notifications.show({
+				title: "Network Switched",
+				message:
+					"Successfully switched to Ethereum Mainnet",
+				color: "green",
+			});
+		} catch (error) {
+			if (error.code === 4902) {
+				// Chain not added, try to add it
+				try {
+					await window.ethereum.request({
+						method: "wallet_addEthereumChain",
+						params: [
+							{
+								chainId: "0x1",
+								chainName: "Ethereum Mainnet",
+								nativeCurrency: {
+									name: "Ether",
+									symbol: "ETH",
+									decimals: 18,
+								},
+								rpcUrls: [
+									"https://eth.llamarpc.com",
+								],
+								blockExplorerUrls: [
+									"https://etherscan.io",
+								],
+							},
+						],
+					});
+					setWrongNetwork(false);
+					notifications.show({
+						title: "Network Added",
+						message:
+							"Ethereum Mainnet added to your wallet",
+						color: "green",
+					});
+				} catch {
+					notifications.show({
+						title: "Network Error",
+						message:
+							"Failed to add Ethereum Mainnet to your wallet",
+						color: "red",
+					});
+				}
+			} else {
+				notifications.show({
+					title: "Network Error",
+					message:
+						"Failed to switch to Ethereum Mainnet",
+					color: "red",
+				});
+			}
+		}
+	};
+
 	// Get quote when form values change
 	useEffect(() => {
 		getQuote();
@@ -327,11 +395,33 @@ export function BridgeForm({
 					method: "eth_chainId",
 				});
 
+			setCurrentChainId(chainId);
+
 			if (chainId !== "0x1") {
+				const networkNames = {
+					"0x1": "Ethereum Mainnet",
+					"0x3": "Ropsten Testnet",
+					"0x4": "Rinkeby Testnet",
+					"0x5": "Goerli Testnet",
+					"0x2a": "Kovan Testnet",
+					"0xaa36a7": "Sepolia Testnet",
+					"0x89": "Polygon",
+					"0x38": "BSC",
+					"0xa": "Optimism",
+					"0xa4b1": "Arbitrum",
+				};
+
+				const currentNetwork =
+					networkNames[chainId] ||
+					`Chain ID ${chainId}`;
+				setWrongNetwork(true);
+
 				throw new Error(
-					"Please switch to Ethereum mainnet to use this bridge."
+					`You are currently on ${currentNetwork}. Please switch to Ethereum Mainnet to use this bridge.`
 				);
 			}
+
+			setWrongNetwork(false);
 
 			if (
 				!tokens.source ||
@@ -671,6 +761,81 @@ export function BridgeForm({
 			(option) =>
 				option.value === currentFormValue
 		);
+
+	// Show network warning if on wrong network
+	if (wrongNetwork) {
+		const networkNames = {
+			"0x1": "Ethereum Mainnet",
+			"0x3": "Ropsten Testnet",
+			"0x4": "Rinkeby Testnet",
+			"0x5": "Goerli Testnet",
+			"0x2a": "Kovan Testnet",
+			"0xaa36a7": "Sepolia Testnet",
+			"0x89": "Polygon",
+			"0x38": "BSC",
+			"0xa": "Optimism",
+			"0xa4b1": "Arbitrum",
+		};
+
+		const currentNetwork =
+			networkNames[currentChainId] ||
+			`Chain ID ${currentChainId}`;
+
+		return (
+			<Card
+				shadow="sm"
+				padding="lg"
+				radius="md"
+				withBorder
+				style={{
+					backgroundColor: "#1a1a1a",
+					borderColor: "#ff4444",
+					color: "#ffffff",
+				}}
+			>
+				<Stack
+					gap="md"
+					align="center"
+				>
+					<IconAlertCircle
+						size="3rem"
+						style={{ color: "#ff4444" }}
+					/>
+					<Title
+						order={2}
+						style={{ color: "#ffffff" }}
+					>
+						Wrong Network
+					</Title>
+					<Text
+						style={{ color: "#ffffff" }}
+						ta="center"
+					>
+						You are currently on{" "}
+						<strong>{currentNetwork}</strong>
+					</Text>
+					<Text
+						style={{ color: "#ffffff" }}
+						ta="center"
+						size="sm"
+					>
+						This bridge only works on Ethereum
+						Mainnet
+					</Text>
+					<Button
+						onClick={switchToEthereumMainnet}
+						size="lg"
+						style={{
+							backgroundColor: "#2d662d",
+							color: "#ffffff",
+						}}
+					>
+						Switch to Ethereum Mainnet
+					</Button>
+				</Stack>
+			</Card>
+		);
+	}
 
 	if (isLoadingTokens) {
 		return (
