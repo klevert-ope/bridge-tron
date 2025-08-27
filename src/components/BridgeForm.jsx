@@ -27,6 +27,7 @@ import {
 import {
 	ChainSymbol,
 	Messenger,
+	FeePaymentMethod,
 } from "@allbridge/bridge-core-sdk";
 
 // Helper function to send raw transactions (following official docs)
@@ -45,11 +46,17 @@ const sendRawTransaction = async (
 			: "0x0",
 	};
 
-	const txHash = await window.ethereum.request({
-		method: "eth_sendTransaction",
-		params: [formattedTx],
-	});
-	return { transactionHash: txHash };
+	try {
+		const txHash = await window.ethereum.request({
+			method: "eth_sendTransaction",
+			params: [formattedTx],
+		});
+
+		return { transactionHash: txHash };
+	} catch (error) {
+		console.error("Transaction failed:", error);
+		throw error;
+	}
 };
 
 export function BridgeForm({
@@ -65,6 +72,7 @@ export function BridgeForm({
 		useState(false);
 	const [needsApproval, setNeedsApproval] =
 		useState(false);
+
 	const [tokens, setTokens] = useState({
 		source: [],
 		destination: null,
@@ -79,7 +87,8 @@ export function BridgeForm({
 			sourceToken: "",
 			amount: "",
 			destinationAddress: "",
-			gasFeePaymentMethod: "native",
+			gasFeePaymentMethod:
+				FeePaymentMethod.WITH_NATIVE_CURRENCY,
 		},
 		validate: {
 			sourceToken: (value) =>
@@ -105,6 +114,14 @@ export function BridgeForm({
 			gasFeePaymentMethod: (value) => {
 				if (!value)
 					return "Please select a gas fee payment method";
+				if (
+					value !==
+						FeePaymentMethod.WITH_NATIVE_CURRENCY &&
+					value !==
+						FeePaymentMethod.WITH_STABLECOIN
+				) {
+					return "Please select a valid gas fee payment method";
+				}
 				return null;
 			},
 		},
@@ -194,6 +211,7 @@ export function BridgeForm({
 			parseFloat(amount) <= 0
 		) {
 			setQuote(null);
+			window.bridgeQuote = null;
 			return;
 		}
 
@@ -212,6 +230,7 @@ export function BridgeForm({
 					"❌ Source or destination token not found"
 				);
 				setQuote(null);
+				window.bridgeQuote = null;
 				return;
 			}
 
@@ -265,6 +284,9 @@ export function BridgeForm({
 
 			setQuote(quoteResult);
 
+			// Store quote in window object for mobile wallet bridge fee calculation
+			window.bridgeQuote = quoteResult;
+
 			// Also set gas fee for compatibility
 			setGasFee(gasFeeOptions);
 		} catch (error) {
@@ -273,6 +295,7 @@ export function BridgeForm({
 				error
 			);
 			setQuote(null);
+			window.bridgeQuote = null;
 			notifications.show({
 				title: "Quote Error",
 				message: `Failed to get bridge quote: ${error.message}`,
@@ -288,10 +311,13 @@ export function BridgeForm({
 		getQuote();
 		// Reset approval state when form values change
 		setNeedsApproval(false);
+		// Clear any cached transaction data when payment method changes
+		window.bridgeQuote = null;
 	}, [
 		form.values.sourceToken,
 		form.values.amount,
 		form.values.destinationAddress,
+		form.values.gasFeePaymentMethod,
 		tokens.source,
 		tokens.destination,
 		sdk,
@@ -430,18 +456,44 @@ export function BridgeForm({
 			// Build bridge transaction
 			let bridgeRawTx = null;
 			try {
+				// Get gas fee options for the transaction
+				const gasFeeOptions =
+					await sdk.getGasFeeOptions(
+						sourceToken,
+						tokens.destination,
+						Messenger.ALLBRIDGE
+					);
+
+				// Prepare transaction parameters
+				const txParams = {
+					amount: amount,
+					fromAccountAddress: account,
+					toAccountAddress: destinationAddress,
+					sourceToken: sourceToken,
+					destinationToken: tokens.destination,
+					messenger: Messenger.ALLBRIDGE,
+					gasFeePaymentMethod:
+						form.values.gasFeePaymentMethod,
+				};
+
+				// Add fee parameter if using stablecoin payment method
+				if (
+					form.values.gasFeePaymentMethod ===
+					FeePaymentMethod.WITH_STABLECOIN
+				) {
+					txParams.fee =
+						gasFeeOptions.stablecoin?.int;
+				}
+
 				bridgeRawTx =
-					await sdk.bridge.rawTxBuilder.send({
-						amount: amount,
-						fromAccountAddress: account,
-						toAccountAddress: destinationAddress,
-						sourceToken: sourceToken,
-						destinationToken: tokens.destination,
-						messenger: Messenger.ALLBRIDGE,
-						gasFeePaymentMethod:
-							form.values.gasFeePaymentMethod,
-					});
+					await sdk.bridge.rawTxBuilder.send(
+						txParams
+					);
 			} catch (txError) {
+				console.error(
+					"Failed to build bridge transaction:",
+					txError
+				);
 				throw new Error(
 					`Failed to build transaction: ${txError.message}`
 				);
@@ -858,7 +910,9 @@ export function BridgeForm({
 						>
 							<Stack gap="lg">
 								<Radio
-									value="native"
+									value={
+										FeePaymentMethod.WITH_NATIVE_CURRENCY
+									}
 									label="Pay with ETH"
 									styles={{
 										label: {
@@ -868,7 +922,9 @@ export function BridgeForm({
 									icon={CheckIcon}
 								/>
 								<Radio
-									value="stablecoin"
+									value={
+										FeePaymentMethod.WITH_STABLECOIN
+									}
 									label="Pay with USDT"
 									styles={{
 										label: {
