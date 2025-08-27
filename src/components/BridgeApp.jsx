@@ -27,7 +27,6 @@ export function BridgeApp() {
 	const theme = useMantineTheme();
 	const {
 		account,
-		provider,
 		network,
 		error,
 		connect,
@@ -54,8 +53,6 @@ export function BridgeApp() {
 	if (sdkLoading) {
 		return (
 			<Box
-				h="100vh"
-				w="100%"
 				style={{
 					background:
 						"linear-gradient(135deg, #000000 0%, #1a1a2e 100%)",
@@ -131,7 +128,8 @@ export function BridgeApp() {
 			style={{
 				background:
 					"linear-gradient(135deg, #000000 0%, #1a1a2e 100%)",
-				overflow: "auto",
+				display: "flex",
+				flexDirection: "column",
 			}}
 		>
 			{/* Wallet Connector - Top Right */}
@@ -139,7 +137,7 @@ export function BridgeApp() {
 				pos="absolute"
 				top="1.5rem"
 				right="1.5rem"
-				style={{ zIndex: 1000 }}
+				style={{ zIndex: 100 }}
 			>
 				<WalletConnector
 					account={account}
@@ -159,35 +157,46 @@ export function BridgeApp() {
 				/>
 			</Box>
 
-			<Center
-				h="100%"
-				w="100%"
-				p="md"
+			{/* Fixed Header */}
+			<Box
+				pt="5rem"
+				pb="1rem"
+				px="md"
+				style={{ flexShrink: 0 }}
+			>
+				<Title
+					order={1}
+					align="center"
+					style={{
+						color: "#ffffff",
+						background:
+							"linear-gradient(45deg, #00ff88, #00ccff)",
+						WebkitBackgroundClip: "text",
+						WebkitTextFillColor: "transparent",
+					}}
+				>
+					BRIDGE TRON
+				</Title>
+			</Box>
+
+			{/* Scrollable Content */}
+			<Box
+				style={{
+					flex: 1,
+					overflow: "auto",
+					padding: "0 1rem 1rem 1rem",
+				}}
 			>
 				<Container
 					size="sm"
 					w="100%"
 					maw={500}
+					mx="auto"
 				>
 					<Stack
 						gap="xl"
 						w="100%"
 					>
-						<Title
-							order={1}
-							align="center"
-							style={{
-								color: "#ffffff",
-								background:
-									"linear-gradient(45deg, #00ff88, #00ccff)",
-								WebkitBackgroundClip: "text",
-								WebkitTextFillColor:
-									"transparent",
-							}}
-						>
-							BRIDGE TRON
-						</Title>
-
 						{/* Bridge Form */}
 						{account ? (
 							<BridgeForm
@@ -255,7 +264,7 @@ export function BridgeApp() {
 						)}
 					</Stack>
 				</Container>
-			</Center>
+			</Box>
 		</Box>
 	);
 }

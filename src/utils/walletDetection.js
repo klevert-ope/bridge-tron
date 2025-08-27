@@ -68,25 +68,6 @@ export function detectWalletType() {
 	return WALLET_TYPES.UNKNOWN;
 }
 
-// Detect Tron wallet type (with retries, since TronLink takes time to load)
-export async function detectTronWalletType(
-	retries = 5,
-	delay = 500
-) {
-	for (let i = 0; i < retries; i++) {
-		if (window.tronWeb && window.tronWeb.ready) {
-			return WALLET_TYPES.TRONLINK;
-		}
-		if (window.tronWallet) {
-			return WALLET_TYPES.TRONWALLET;
-		}
-		await new Promise((r) =>
-			setTimeout(r, delay)
-		);
-	}
-	return null;
-}
-
 // ==========================================
 // Wallet Info Helpers
 // ==========================================
@@ -96,24 +77,6 @@ export function getWalletName(walletType) {
 		? WALLET_NAMES[walletType] ||
 				WALLET_NAMES[WALLET_TYPES.UNKNOWN]
 		: WALLET_NAMES[WALLET_TYPES.UNKNOWN];
-}
-
-export function getDetectedWalletInfo() {
-	const walletType = detectWalletType();
-	return {
-		type: walletType,
-		name: getWalletName(walletType),
-		isInstalled: !!walletType,
-	};
-}
-
-export async function getDetectedTronWalletInfo() {
-	const walletType = await detectTronWalletType();
-	return {
-		type: walletType,
-		name: getWalletName(walletType),
-		isInstalled: !!walletType,
-	};
 }
 
 export function getAllAvailableWallets() {
@@ -184,33 +147,6 @@ export const WALLET_INSTALL_URLS = {
 		"https://www.tronwallet.me/",
 };
 
-export function getRecommendedWalletUrl() {
-	const detectedType = detectWalletType();
-	return (
-		(detectedType &&
-			WALLET_INSTALL_URLS[detectedType]) ||
-		WALLET_INSTALL_URLS[WALLET_TYPES.METAMASK]
-	);
-}
-
-export function getWalletIcon(walletType) {
-	const iconMap = {
-		[WALLET_TYPES.METAMASK]: "🦊",
-		[WALLET_TYPES.TRUST_WALLET]: "🛡️",
-		[WALLET_TYPES.EXODUS]: "📱",
-		[WALLET_TYPES.BRAVE]: "🦁",
-		[WALLET_TYPES.COINBASE]: "🪙",
-		[WALLET_TYPES.PHANTOM]: "👻",
-		[WALLET_TYPES.TRONLINK]: "🔗",
-		[WALLET_TYPES.TRONWALLET]: "🔗",
-		[WALLET_TYPES.UNKNOWN]: "💳",
-	};
-	return (
-		iconMap[walletType] ||
-		iconMap[WALLET_TYPES.UNKNOWN]
-	);
-}
-
 // ==========================================
 // Validation & Provider Management
 // ==========================================
@@ -230,71 +166,11 @@ export async function validateWalletSupport(
 	}
 }
 
-export async function validateTronWalletSupport() {
-	try {
-		if (!window.tronWeb)
-			throw new Error("Tron wallet not found");
-		if (!window.tronWeb.ready)
-			throw new Error("Tron wallet not ready");
-		if (!window.tronWeb.defaultAddress?.base58)
-			throw new Error(
-				"Tron wallet not connected"
-			);
-		return true;
-	} catch (e) {
-		console.error(
-			"Tron wallet validation failed:",
-			e
-		);
-		return false;
-	}
-}
-
-export async function getTronAddress() {
-	if (!window.tronWeb || !window.tronWeb.ready)
-		throw new Error("Tron wallet not available");
-	const address =
-		window.tronWeb.defaultAddress?.base58;
-	if (!address)
-		throw new Error("No Tron address found");
-	return address;
-}
-
-export async function connectTronWallet() {
-	if (!window.tronWeb)
-		throw new Error("Tron wallet not installed");
-	if (!window.tronWeb.ready)
-		throw new Error(
-			"Tron wallet not ready. Please unlock your wallet."
-		);
-	if (window.tronWeb.defaultAddress?.base58)
-		return window.tronWeb.defaultAddress.base58;
-
-	try {
-		const accounts = await window.tronWeb.request(
-			{ method: "tron_requestAccounts" }
-		);
-		if (accounts?.length > 0) return accounts[0];
-	} catch (err) {
-		console.warn("Tron request failed:", err);
-	}
-
-	if (window.tronWeb.defaultAddress?.base58)
-		return window.tronWeb.defaultAddress.base58;
-	throw new Error(
-		"No Tron address available. Please unlock your wallet."
-	);
-}
-
 export function isAnyWalletInstalled() {
 	return (
 		typeof window !== "undefined" &&
 		!!window.ethereum
 	);
-}
-
-export function isWalletInstalled(walletType) {
-	return detectWalletType() === walletType;
 }
 
 export function isTrustWalletInstalled() {
@@ -313,25 +189,6 @@ export function isTrustWalletInstalled() {
 				p.isTrust || p.trust || p.isTrustWallet
 		)
 	);
-}
-
-export function isTronWalletInstalled() {
-	return (
-		typeof window !== "undefined" &&
-		!!window.tronWeb
-	);
-}
-
-export function getTronWalletStatus() {
-	if (!isTronWalletInstalled())
-		return { installed: false, ready: false };
-	return {
-		installed: true,
-		ready: window.tronWeb.ready || false,
-		address:
-			window.tronWeb.defaultAddress?.base58 ||
-			null,
-	};
 }
 
 // Get the correct provider for a specific wallet type

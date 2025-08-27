@@ -9,7 +9,6 @@ import {
 	Modal,
 	ActionIcon,
 	Tooltip,
-	SimpleGrid,
 } from "@mantine/core";
 import {
 	IconWallet,
@@ -21,7 +20,6 @@ import {
 } from "@tabler/icons-react";
 import { useState } from "react";
 import {
-	getWalletIcon,
 	WALLET_INSTALL_URLS,
 	WALLET_TYPES,
 } from "../utils/walletDetection.js";
@@ -314,11 +312,7 @@ export function WalletConnector({
 								)
 							}
 							leftSection={
-								<span>
-									{getWalletIcon(
-										WALLET_TYPES.METAMASK
-									)}
-								</span>
+								<IconExternalLink size="1rem" />
 							}
 							size="lg"
 							style={{

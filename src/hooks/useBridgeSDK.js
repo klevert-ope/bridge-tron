@@ -16,8 +16,6 @@ export function useBridgeSDK() {
 				setIsLoading(true);
 				setError(null);
 
-				// Use the recommended approach from Allbridge SDK docs
-				// Initialize with RPC URLs directly (RECOMMENDED approach)
 				const bridgeSDK = new AllbridgeCoreSdk({
 					...nodeRpcUrlsDefault,
 					ETH: "https://eth.llamarpc.com",
