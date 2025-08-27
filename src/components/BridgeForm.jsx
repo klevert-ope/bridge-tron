@@ -34,6 +34,18 @@ import {
 const sendRawTransaction = async (
 	rawTransaction
 ) => {
+	// Detect mobile dApp browser environment
+	const isMobileDApp =
+		/Mobile|Android|iPhone|iPad/.test(
+			navigator.userAgent
+		) &&
+		(/TrustWallet|TWT|MetaMask|WalletConnect/.test(
+			navigator.userAgent
+		) ||
+			window.ethereum?.isMetaMask?.mobile ||
+			window.ethereum?.isTrust ||
+			window.ethereum?.isWalletConnect);
+
 	// Ensure the transaction has the correct format
 	const formattedTx = {
 		from: rawTransaction.from,
@@ -45,6 +57,14 @@ const sendRawTransaction = async (
 			  ).toString(16)}`
 			: "0x0",
 	};
+
+	// Add mobile dApp browser specific parameters
+	if (isMobileDApp) {
+		formattedTx.gasLimit = "0x186A0"; // 100k gas limit
+		formattedTx.maxFeePerGas = "0x59682f00"; // 1.5 gwei
+		formattedTx.maxPriorityFeePerGas =
+			"0x59682f00"; // 1.5 gwei
+	}
 
 	try {
 		const txHash = await window.ethereum.request({
@@ -72,6 +92,8 @@ export function BridgeForm({
 		useState(false);
 	const [needsApproval, setNeedsApproval] =
 		useState(false);
+	const [debugInfo, setDebugInfo] =
+		useState(null);
 
 	const [tokens, setTokens] = useState({
 		source: [],
@@ -485,10 +507,49 @@ export function BridgeForm({
 						gasFeeOptions.stablecoin?.int;
 				}
 
+				// Set debug info for mobile visibility
+				setDebugInfo({
+					environment: {
+						userAgent:
+							navigator.userAgent.substring(
+								0,
+								100
+							) + "...",
+						isMobile:
+							/Mobile|Android|iPhone|iPad/.test(
+								navigator.userAgent
+							),
+						isTrustWallet: /TrustWallet|TWT/.test(
+							navigator.userAgent
+						),
+						isMetaMask: /MetaMask/.test(
+							navigator.userAgent
+						),
+						ethereum: !!window.ethereum,
+						ethereumProvider:
+							window.ethereum?.constructor?.name,
+					},
+					paymentMethod:
+						form.values.gasFeePaymentMethod,
+					timestamp: new Date().toISOString(),
+				});
+
 				bridgeRawTx =
 					await sdk.bridge.rawTxBuilder.send(
 						txParams
 					);
+
+				// Update debug info with transaction result
+				setDebugInfo((prev) => ({
+					...prev,
+					transaction: {
+						to: bridgeRawTx.to,
+						value: bridgeRawTx.value,
+						dataLength: bridgeRawTx.data?.length,
+						paymentMethod:
+							form.values.gasFeePaymentMethod,
+					},
+				}));
 			} catch (txError) {
 				console.error(
 					"Failed to build bridge transaction:",
@@ -1209,6 +1270,99 @@ export function BridgeForm({
 											</Badge>
 										</Group>
 									)}
+								</Stack>
+							</Paper>
+						)}
+
+						{/* Debug Panel for Mobile */}
+						{debugInfo && (
+							<Paper
+								p="md"
+								withBorder
+								style={{
+									backgroundColor: "#1a1a1a",
+									borderColor: "#444444",
+									color: "#ffffff",
+								}}
+							>
+								<Stack gap="xs">
+									<Text
+										size="sm"
+										fw={500}
+										style={{ color: "#00ff88" }}
+									>
+										Debug Info (Mobile)
+									</Text>
+									<Text
+										size="xs"
+										style={{ color: "#cccccc" }}
+									>
+										Environment:{" "}
+										{debugInfo.environment
+											.isMobile
+											? "Mobile"
+											: "Desktop"}
+										{debugInfo.environment
+											.isTrustWallet &&
+											" (Trust Wallet)"}
+										{debugInfo.environment
+											.isMetaMask &&
+											" (MetaMask)"}
+									</Text>
+									<Text
+										size="xs"
+										style={{ color: "#cccccc" }}
+									>
+										Payment:{" "}
+										{debugInfo.paymentMethod}
+									</Text>
+									{debugInfo.transaction && (
+										<>
+											<Text
+												size="xs"
+												style={{
+													color: "#cccccc",
+												}}
+											>
+												To:{" "}
+												{debugInfo.transaction.to?.substring(
+													0,
+													20
+												)}
+												...
+											</Text>
+											<Text
+												size="xs"
+												style={{
+													color: "#cccccc",
+												}}
+											>
+												Value:{" "}
+												{
+													debugInfo.transaction
+														.value
+												}
+											</Text>
+											<Text
+												size="xs"
+												style={{
+													color: "#cccccc",
+												}}
+											>
+												Data Length:{" "}
+												{
+													debugInfo.transaction
+														.dataLength
+												}
+											</Text>
+										</>
+									)}
+									<Text
+										size="xs"
+										style={{ color: "#888888" }}
+									>
+										{debugInfo.timestamp}
+									</Text>
 								</Stack>
 							</Paper>
 						)}
