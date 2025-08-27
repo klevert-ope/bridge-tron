@@ -22,6 +22,7 @@ import { FeePaymentMethod } from "@allbridge/bridge-core-sdk";
 import { useBridgeForm } from "../hooks/useBridgeForm";
 import { BridgeQuoteDisplay } from "./BridgeQuoteDisplay";
 import { FeeInformationDisplay } from "./FeeInformationDisplay";
+import { validateTronAddress } from "../utils/bridgeUtils.js";
 
 export function BridgeForm({
 	sdk,
@@ -224,12 +225,35 @@ export function BridgeForm({
 						<TextInput
 							label="Destination Address (Tron)"
 							placeholder="T..."
-							description="Enter your Tron wallet address (starts with T)"
+							description={
+								form.values.destinationAddress
+									? validateTronAddress(
+											form.values
+												.destinationAddress
+									  ).isValid
+										? "✅ Valid Tron address"
+										: "❌ " +
+										  validateTronAddress(
+												form.values
+													.destinationAddress
+										  ).error
+									: "Enter your Tron wallet address (starts with T)"
+							}
 							disabled={isLoading}
 							leftSection={
 								<IconWallet
 									size="1rem"
-									style={{ color: "#00ff88" }}
+									style={{
+										color:
+											form.values
+												.destinationAddress &&
+											validateTronAddress(
+												form.values
+													.destinationAddress
+											).isValid
+												? "#00ff88"
+												: "#666666",
+									}}
 								/>
 							}
 							{...form.getInputProps(
@@ -238,7 +262,18 @@ export function BridgeForm({
 							styles={{
 								input: {
 									backgroundColor: "#222222",
-									borderColor: "#444444",
+									borderColor:
+										form.values
+											.destinationAddress &&
+										validateTronAddress(
+											form.values
+												.destinationAddress
+										).isValid
+											? "#00ff88"
+											: form.values
+													.destinationAddress
+											? "#ff4444"
+											: "#444444",
 									color: "#ffffff",
 									fontSize: "16px",
 								},
@@ -246,7 +281,18 @@ export function BridgeForm({
 									color: "#ffffff",
 								},
 								description: {
-									color: "#ffffff",
+									color:
+										form.values
+											.destinationAddress &&
+										validateTronAddress(
+											form.values
+												.destinationAddress
+										).isValid
+											? "#00ff88"
+											: form.values
+													.destinationAddress
+											? "#ff4444"
+											: "#ffffff",
 								},
 							}}
 						/>

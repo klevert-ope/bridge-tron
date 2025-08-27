@@ -16,14 +16,94 @@ export function formatTokenAmount(
 }
 
 /**
- * Validate Tron address format
+ * Validate Tron address format with comprehensive checks
+ * @param {string} address - The address to validate
+ * @returns {Object} Validation result with isValid boolean and error message
+ */
+export function validateTronAddress(address) {
+	if (!address) {
+		return {
+			isValid: false,
+			error: "Tron address is required",
+		};
+	}
+
+	// Trim whitespace
+	const trimmedAddress = address.trim();
+
+	if (trimmedAddress.length === 0) {
+		return {
+			isValid: false,
+			error: "Tron address cannot be empty",
+		};
+	}
+
+	// Check if it starts with T
+	if (!trimmedAddress.startsWith("T")) {
+		return {
+			isValid: false,
+			error: "Tron address must start with 'T'",
+		};
+	}
+
+	// Check length (Tron addresses are exactly 34 characters)
+	if (trimmedAddress.length !== 34) {
+		return {
+			isValid: false,
+			error:
+				"Tron address must be exactly 34 characters long",
+		};
+	}
+
+	// Check for valid characters (Tron addresses use Base58 encoding)
+	const validChars = /^T[A-Za-z1-9]+$/;
+	if (!validChars.test(trimmedAddress)) {
+		return {
+			isValid: false,
+			error:
+				"Tron address contains invalid characters",
+		};
+	}
+
+	// Check for common invalid patterns
+	if (trimmedAddress === "T" + "0".repeat(33)) {
+		return {
+			isValid: false,
+			error: "Invalid Tron address format",
+		};
+	}
+
+	// Additional checks for common mistakes
+	if (
+		trimmedAddress.includes("O") ||
+		trimmedAddress.includes("0")
+	) {
+		// Check if it's a valid Base58 string (no 0, O, I, l characters)
+		const base58Pattern =
+			/^T[1-9A-HJ-NP-Za-km-z]{33}$/;
+		if (!base58Pattern.test(trimmedAddress)) {
+			return {
+				isValid: false,
+				error:
+					"Tron address contains invalid Base58 characters",
+			};
+		}
+	}
+
+	return {
+		isValid: true,
+		error: null,
+	};
+}
+
+/**
+ * Validate Tron address format (legacy function for backward compatibility)
  * @param {string} address - The address to validate
  * @returns {boolean} True if valid Tron address
  */
 export function isValidTronAddress(address) {
-	if (!address) return false;
-	// Tron addresses start with T and are 34 characters long
-	return /^T[A-Za-z1-9]{33}$/.test(address);
+	const validation = validateTronAddress(address);
+	return validation.isValid;
 }
 
 /**

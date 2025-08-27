@@ -3,6 +3,7 @@ import {
 	Messenger,
 	FeePaymentMethod,
 } from "@allbridge/bridge-core-sdk";
+import { validateTronAddress } from "./bridgeUtils.js";
 
 // Transaction handling functions
 export const sendRawTransaction = async (
@@ -251,9 +252,10 @@ export const validateForm = {
 	destinationAddress: (value) => {
 		if (!value)
 			return "Please enter destination address";
-		// Basic Tron address validation (starts with T and 34 characters)
-		if (!/^T[A-Za-z1-9]{33}$/.test(value)) {
-			return "Please enter a valid Tron address";
+
+		const validation = validateTronAddress(value);
+		if (!validation.isValid) {
+			return validation.error;
 		}
 		return null;
 	},
