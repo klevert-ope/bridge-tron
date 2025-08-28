@@ -138,6 +138,14 @@ export const findSourceToken = (
 	});
 };
 
+// Slippage Protection Configuration
+const SLIPPAGE_CONFIG = {
+	DEFAULT_TOLERANCE: 0.5, // 0.5%
+	MAX_TOLERANCE: 2.0, // 2%
+	MIN_TOLERANCE: 0.1, // 0.1%
+	DEADLINE_MINUTES: 5, // 5 minutes
+};
+
 // Quote management functions
 export const getBridgeQuote = async (
 	sdk,
@@ -179,6 +187,16 @@ export const getBridgeQuote = async (
 			tokens.destination
 		);
 
+	// Calculate slippage protection values
+	const slippageTolerance =
+		SLIPPAGE_CONFIG.DEFAULT_TOLERANCE;
+	const minAmountToReceive =
+		amountToBeReceived *
+		(1 - slippageTolerance / 100);
+	const deadline =
+		Math.floor(Date.now() / 1000) +
+		SLIPPAGE_CONFIG.DEADLINE_MINUTES * 60;
+
 	let gasFeeOptions;
 	let transferTimeMs;
 
@@ -218,6 +236,9 @@ export const getBridgeQuote = async (
 			toToken: tokens.destination,
 			fromAmount: amount,
 			toAmount: amountToBeReceived,
+			minAmountToReceive: minAmountToReceive,
+			slippageTolerance: slippageTolerance,
+			deadline: deadline,
 			gasFee:
 				gasFeeOptions.native?.float ||
 				gasFeeOptions.native?.int,
@@ -278,12 +299,6 @@ export const validateForm = {
 export const forceStateReset = () => {
 	// Clear any cached data
 	try {
-		if (window.bridgeQuote)
-			delete window.bridgeQuote;
-		if (window.lastQuote) delete window.lastQuote;
-		if (window.lastGasFee)
-			delete window.lastGasFee;
-
 		// Clear storage
 		Object.keys(localStorage).forEach((key) => {
 			if (
@@ -314,58 +329,114 @@ export const forceStateReset = () => {
 
 export const clearCachedData = () => {
 	try {
-		// Clear any global variables that might be cached
-		if (window.bridgeQuote)
-			delete window.bridgeQuote;
-		if (window.lastQuote) delete window.lastQuote;
-		if (window.lastGasFee)
-			delete window.lastGasFee;
+		// Clear storage only - no global variables
+		Object.keys(localStorage).forEach((key) => {
+			if (
+				key.includes("bridge") ||
+				key.includes("quote") ||
+				key.includes("gas")
+			) {
+				localStorage.removeItem(key);
+			}
+		});
+
+		Object.keys(sessionStorage).forEach((key) => {
+			if (
+				key.includes("bridge") ||
+				key.includes("quote") ||
+				key.includes("gas")
+			) {
+				sessionStorage.removeItem(key);
+			}
+		});
 	} catch (e) {
-		console.log(
-			"⚠️ Could not clear global variables:",
-			e
-		);
+		console.log("⚠️ Could not clear storage:", e);
 	}
 };
 
 // Error handling functions
 export const handleTransactionError = (error) => {
-	let errorMessage = error.message;
+	// Sanitize error messages to prevent information leakage
+	const sanitizeError = (err) => {
+		const message = err.message || err.toString();
 
-	if (error.code === 4001) {
-		errorMessage =
-			"Transaction was rejected by user";
-	} else if (error.code === -32603) {
-		if (
-			error.message.includes("insufficient funds")
-		) {
-			errorMessage =
-				"Insufficient ETH balance for gas fees. Please add more ETH to your wallet.";
-		} else if (
-			error.message.includes("execution reverted")
-		) {
-			errorMessage =
-				"Transaction failed - contract execution reverted. This might be due to insufficient token balance or contract issues.";
-		} else {
-			errorMessage =
-				"Transaction failed - RPC error. This might be due to network congestion or contract issues. Please try again.";
+		// Define safe error messages
+		const safeMessages = {
+			// User actions
+			"user rejected":
+				"Transaction was cancelled by user",
+			"user denied":
+				"Transaction was denied by user",
+			"user cancelled":
+				"Transaction was cancelled by user",
+
+			// Balance issues
+			"insufficient funds":
+				"Insufficient balance for transaction",
+			"insufficient balance":
+				"Insufficient balance for transaction",
+			"balance too low":
+				"Insufficient balance for transaction",
+
+			// Gas issues
+			gas: "Gas estimation failed. Please try again",
+			"gas limit":
+				"Gas limit exceeded. Please try again",
+			"gas price":
+				"Gas price issue. Please try again",
+
+			// Network issues
+			network:
+				"Network connection issue. Please try again",
+			timeout:
+				"Request timed out. Please try again",
+			connection:
+				"Connection issue. Please try again",
+
+			// Contract issues
+			"execution reverted":
+				"Transaction failed. Please check your inputs and try again",
+			contract:
+				"Contract interaction failed. Please try again",
+
+			// SDK issues
+			sdk: "Bridge service temporarily unavailable. Please try again",
+			quote:
+				"Unable to get quote. Please try again",
+			bridge:
+				"Bridge service temporarily unavailable. Please try again",
+		};
+
+		// Check for specific error codes
+		if (err.code === 4001) {
+			return "Transaction was cancelled by user";
 		}
-	} else if (
-		error.message.includes("insufficient funds")
-	) {
-		errorMessage =
-			"Insufficient ETH balance for gas fees. Please add more ETH to your wallet.";
-	} else if (error.message.includes("gas")) {
-		errorMessage =
-			"Gas estimation failed. Please try again or increase gas limit.";
-	} else if (
-		error.message.includes("execution reverted")
-	) {
-		errorMessage =
-			"Transaction failed - contract execution reverted. Please check your token balance and try again.";
-	}
+		if (err.code === -32603) {
+			return "Network error. Please try again";
+		}
+		if (err.code === -32000) {
+			return "Network busy. Please try again";
+		}
 
-	return errorMessage;
+		// Check for known error patterns
+		for (const [
+			pattern,
+			safeMessage,
+		] of Object.entries(safeMessages)) {
+			if (
+				message
+					.toLowerCase()
+					.includes(pattern.toLowerCase())
+			) {
+				return safeMessage;
+			}
+		}
+
+		// Default safe message
+		return "Transaction failed. Please try again";
+	};
+
+	return sanitizeError(error);
 };
 
 // Bridge transaction building
@@ -373,13 +444,50 @@ export const buildBridgeTransaction = async (
 	sdk,
 	formValues,
 	tokens,
-	sourceToken
+	sourceToken,
+	quote
 ) => {
 	const {
 		amount,
 		destinationAddress,
 		gasFeePaymentMethod,
 	} = formValues;
+
+	// Validate quote and slippage protection
+	if (!quote) {
+		throw new Error(
+			"Quote is required for transaction building"
+		);
+	}
+
+	// Handle both quote formats: direct quote object or { success, quote } structure
+	const quoteData = quote.quote || quote;
+
+	if (
+		!quoteData ||
+		!quoteData.minAmountToReceive ||
+		!quoteData.deadline
+	) {
+		throw new Error(
+			"Valid quote with slippage protection data required for transaction building"
+		);
+	}
+
+	const {
+		minAmountToReceive,
+		deadline,
+		slippageTolerance,
+	} = quoteData;
+
+	// Check if current time exceeds deadline
+	const currentTime = Math.floor(
+		Date.now() / 1000
+	);
+	if (currentTime > deadline) {
+		throw new Error(
+			"Quote has expired. Please get a new quote."
+		);
+	}
 
 	let gasFeeOptions;
 	try {
@@ -396,7 +504,7 @@ export const buildBridgeTransaction = async (
 		);
 	}
 
-	// Prepare transaction parameters
+	// Prepare transaction parameters with slippage protection
 	const txParams = {
 		amount: amount,
 		fromAccountAddress: formValues.account,
@@ -405,6 +513,10 @@ export const buildBridgeTransaction = async (
 		destinationToken: tokens.destination,
 		messenger: Messenger.ALLBRIDGE,
 		gasFeePaymentMethod: gasFeePaymentMethod,
+		// Add slippage protection
+		minAmountToReceive: minAmountToReceive,
+		deadline: deadline,
+		slippageTolerance: slippageTolerance,
 	};
 
 	const allbridgeSourceToken = {

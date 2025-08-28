@@ -124,7 +124,6 @@ export const useBridgeForm = (
 			!formValues.gasFeePaymentMethod
 		) {
 			setQuote(null);
-			window.bridgeQuote = null;
 			return;
 		}
 
@@ -138,7 +137,6 @@ export const useBridgeForm = (
 
 			if (quoteResult) {
 				setQuote(quoteResult);
-				window.bridgeQuote = quoteResult;
 				// Extract gas fee options from the quote structure
 				const gasFeeOptions = {
 					native: {
@@ -156,7 +154,6 @@ export const useBridgeForm = (
 				setGasFee(gasFeeOptions);
 			} else {
 				setQuote(null);
-				window.bridgeQuote = null;
 			}
 		} catch (error) {
 			console.error(
@@ -164,10 +161,10 @@ export const useBridgeForm = (
 				error
 			);
 			setQuote(null);
-			window.bridgeQuote = null;
 			notifications.show({
 				title: "Quote Error",
-				message: `Failed to get bridge quote: ${error.message}`,
+				message:
+					"Unable to get quote. Please try again.",
 				color: "red",
 			});
 		} finally {
@@ -187,12 +184,10 @@ export const useBridgeForm = (
 			getQuote();
 		} else {
 			setQuote(null);
-			window.bridgeQuote = null;
 			setGasFee(null);
 		}
 
 		setNeedsApproval(false);
-		window.bridgeQuote = null;
 	}, [
 		form.values,
 		tokens.source,
@@ -262,7 +257,8 @@ export const useBridgeForm = (
 			console.error("Approval failed:", error);
 			notifications.show({
 				title: "Approval Failed",
-				message: error.message,
+				message:
+					"Token approval failed. Please try again.",
 				color: "red",
 			});
 			resetFormAndQuote();
@@ -317,12 +313,23 @@ export const useBridgeForm = (
 			}
 
 			// Validate quote
-			if (!quote || !quote.quote) {
+			const quoteData = quote?.quote || quote;
+			if (
+				!quoteData ||
+				!quoteData.minAmountToReceive ||
+				!quoteData.deadline
+			) {
 				console.warn(
 					"No valid quote available, getting fresh quote..."
 				);
 				await getQuote();
-				if (!quote || !quote.quote) {
+				const freshQuoteData =
+					quote?.quote || quote;
+				if (
+					!freshQuoteData ||
+					!freshQuoteData.minAmountToReceive ||
+					!freshQuoteData.deadline
+				) {
 					throw new Error(
 						"Failed to get valid quote. Please try again."
 					);
@@ -331,17 +338,22 @@ export const useBridgeForm = (
 
 			// Validate quote payment method
 			if (
-				quote &&
-				quote.quote?.paymentMethod !==
+				quoteData &&
+				quoteData.paymentMethod !==
 					form.values.gasFeePaymentMethod
 			) {
 				console.warn(
 					"Quote payment method mismatch, recalculating..."
 				);
 				setQuote(null);
-				window.bridgeQuote = null;
 				await getQuote();
-				if (!quote || !quote.quote) {
+				const freshQuoteData =
+					quote?.quote || quote;
+				if (
+					!freshQuoteData ||
+					!freshQuoteData.minAmountToReceive ||
+					!freshQuoteData.deadline
+				) {
 					throw new Error(
 						"Failed to get valid quote for selected payment method"
 					);
@@ -382,7 +394,8 @@ export const useBridgeForm = (
 					sdk,
 					{ ...form.values, account },
 					tokens,
-					sourceToken
+					sourceToken,
+					quote
 				);
 
 			if (!bridgeRawTx) {
@@ -439,14 +452,34 @@ export const useBridgeForm = (
 
 	// Handle form submission
 	const handleSubmit = async () => {
-		if (!quote || !quote.quote) {
+		// Check for quote availability
+		if (!quote) {
 			console.warn(
-				"❌ No valid quote available, cannot proceed"
+				"❌ No quote available, cannot proceed"
 			);
 			notifications.show({
 				title: "Quote Required",
 				message:
 					"Please wait for the quote to be calculated before proceeding",
+				color: "yellow",
+			});
+			return;
+		}
+
+		// Handle both quote formats
+		const quoteData = quote.quote || quote;
+		if (
+			!quoteData ||
+			!quoteData.minAmountToReceive ||
+			!quoteData.deadline
+		) {
+			console.warn(
+				"❌ Invalid quote data, cannot proceed"
+			);
+			notifications.show({
+				title: "Invalid Quote",
+				message:
+					"Quote data is invalid. Please try again.",
 				color: "yellow",
 			});
 			return;

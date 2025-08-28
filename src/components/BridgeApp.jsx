@@ -1,30 +1,22 @@
 import { useState, useEffect } from "react";
 import {
 	Container,
-	Paper,
 	Title,
-	Text,
-	Group,
 	Stack,
-	Alert,
-	Loader,
 	Box,
-	Center,
-	ThemeIcon,
-	useMantineTheme,
 } from "@mantine/core";
-import {
-	IconAlertCircle,
-	IconWallet,
-} from "@tabler/icons-react";
 import { WalletConnector } from "./WalletConnector";
 import { BridgeForm } from "./BridgeForm";
 import { BridgeStatus } from "./BridgeStatus";
 import { useWallet } from "../hooks/useWallet";
 import { useBridgeSDK } from "../hooks/useBridgeSDK";
+import {
+	UnifiedLoadingState,
+	ErrorState,
+	WalletConnectionState,
+} from "./LoadingStates";
 
 export function BridgeApp() {
-	const theme = useMantineTheme();
 	const {
 		account,
 		network,
@@ -52,82 +44,28 @@ export function BridgeApp() {
 
 	if (sdkLoading) {
 		return (
-			<Box
-				style={{
-					background:
-						"linear-gradient(135deg, #000000 0%, #1a1a2e 100%)",
-				}}
-			>
-				<Center h="100%">
-					<Paper
-						p="xl"
-						radius="lg"
-						withBorder
-						style={{
-							backgroundColor:
-								"rgba(17, 17, 17, 0.8)",
-							borderColor: theme.colors.teal[7],
-							backdropFilter: "blur(10px)",
-						}}
-					>
-						<Group justify="center">
-							<Loader
-								size="lg"
-								color={theme.colors.teal[5]}
-							/>
-							<Text style={{ color: "#ffffff" }}>
-								Initializing bridge SDK...
-							</Text>
-						</Group>
-					</Paper>
-				</Center>
-			</Box>
+			<UnifiedLoadingState
+				message="Initializing bridge SDK..."
+				color="#00ff88"
+			/>
 		);
 	}
 
 	if (sdkError) {
 		return (
-			<Box
-				h="100vh"
-				w="100%"
-				style={{
-					background:
-						"linear-gradient(135deg, #000000 0%, #1a1a2e 100%)",
-				}}
-			>
-				<Center h="100%">
-					<Alert
-						icon={
-							<IconAlertCircle size="1.5rem" />
-						}
-						title="SDK Error"
-						color="red"
-						variant="filled"
-						radius="lg"
-						style={{
-							backgroundColor:
-								"rgba(120, 0, 0, 0.8)",
-							border: "1px solid #ff4444",
-							color: "#ffffff",
-							maxWidth: "500px",
-							backdropFilter: "blur(10px)",
-						}}
-					>
-						Failed to initialize bridge SDK:{" "}
-						{sdkError.message}
-					</Alert>
-				</Center>
-			</Box>
+			<ErrorState
+				title="SDK Error"
+				message={`Failed to initialize bridge SDK: ${sdkError.message}`}
+				onRetry={() => window.location.reload()}
+			/>
 		);
 	}
 
 	return (
 		<Box
-			h="100vh"
+			mih="100vh"
 			w="100%"
 			style={{
-				background:
-					"linear-gradient(135deg, #000000 0%, #1a1a2e 100%)",
 				display: "flex",
 				flexDirection: "column",
 			}}
@@ -192,6 +130,7 @@ export function BridgeApp() {
 					w="100%"
 					maw={500}
 					mx="auto"
+					px="md"
 				>
 					<Stack
 						gap="xl"
@@ -207,50 +146,7 @@ export function BridgeApp() {
 								}
 							/>
 						) : (
-							<Paper
-								p="xl"
-								radius="lg"
-								withBorder
-								style={{
-									backgroundColor:
-										"rgba(17, 17, 17, 0.8)",
-									borderColor: "#333333",
-									color: "#ffffff",
-									backdropFilter: "blur(10px)",
-								}}
-							>
-								<Stack
-									gap="md"
-									align="center"
-								>
-									<ThemeIcon
-										size="xl"
-										radius="xl"
-										variant="light"
-										color="gray"
-										style={{
-											backgroundColor:
-												"rgba(100, 100, 100, 0.3)",
-										}}
-									>
-										<IconWallet size="3rem" />
-									</ThemeIcon>
-									<Title
-										order={2}
-										ta="center"
-										style={{ color: "#ffffff" }}
-									>
-										Connect Your Wallet
-									</Title>
-									<Text
-										style={{ color: "#ffffff" }}
-										ta="center"
-									>
-										Please connect your wallet to
-										start bridging tokens
-									</Text>
-								</Stack>
-							</Paper>
+							<WalletConnectionState />
 						)}
 
 						{/* Transfer Status */}

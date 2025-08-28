@@ -5,16 +5,12 @@ import {
 	Button,
 	Group,
 	Stack,
-	Text,
-	Alert,
-	Loader,
 	Card,
 	Radio,
 	RadioGroup,
 	CheckIcon,
 } from "@mantine/core";
 import {
-	IconAlertCircle,
 	IconArrowRight,
 	IconWallet,
 } from "@tabler/icons-react";
@@ -23,6 +19,10 @@ import { useBridgeForm } from "../hooks/useBridgeForm";
 import { BridgeQuoteDisplay } from "./BridgeQuoteDisplay";
 import { FeeInformationDisplay } from "./FeeInformationDisplay";
 import { validateTronAddress } from "../utils/bridgeUtils.js";
+import {
+	UnifiedLoadingState,
+	ErrorState,
+} from "./LoadingStates";
 
 export function BridgeForm({
 	sdk,
@@ -84,18 +84,10 @@ export function BridgeForm({
 
 	if (isLoadingTokens) {
 		return (
-			<Group
-				justify="center"
-				py="xl"
-			>
-				<Loader
-					size="lg"
-					color="#00ff88"
-				/>
-				<Text style={{ color: "#ffffff" }}>
-					Loading available tokens...
-				</Text>
-			</Group>
+			<UnifiedLoadingState
+				message="Loading available tokens..."
+				showBackground={false}
+			/>
 		);
 	}
 
@@ -104,43 +96,29 @@ export function BridgeForm({
 		tokens.source.length === 0
 	) {
 		return (
-			<Alert
-				icon={<IconAlertCircle size="1rem" />}
+			<ErrorState
 				title="No Tokens Found"
-				color="yellow"
-				my="md"
-			>
-				<Text size="sm">
-					No tokens are available for bridging.
-					Please check your connection and try
-					again.
-				</Text>
-			</Alert>
+				message="No tokens are available for bridging. Please check your connection and try again."
+				showBackground={false}
+			/>
 		);
 	}
 
 	// Check if we have any valid options after filtering
 	if (validOptions.length === 0) {
 		return (
-			<Alert
-				icon={<IconAlertCircle size="1rem" />}
+			<ErrorState
 				title="No Tokens Available"
-				color="yellow"
-				my="md"
-			>
-				<Text size="sm">
-					No valid tokens found. Please try
-					refreshing the page or check your
-					connection.
-				</Text>
-			</Alert>
+				message="No valid tokens found. Please try refreshing the page or check your connection."
+				showBackground={false}
+			/>
 		);
 	}
 
 	return (
 		<Card
 			shadow="sm"
-			padding="sm"
+			padding="lg"
 			radius="md"
 			withBorder
 			style={{
@@ -179,9 +157,11 @@ export function BridgeForm({
 									borderColor: "#444444",
 									color: "#ffffff",
 									fontSize: "16px",
+									height: "42px",
 								},
 								label: {
 									color: "#ffffff",
+									fontSize: "16px",
 								},
 								item: {
 									backgroundColor: "#222222",
@@ -367,6 +347,7 @@ export function BridgeForm({
 						<Group
 							justify="center"
 							mt="md"
+							gap="md"
 						>
 							{needsApproval ? (
 								<Button
@@ -380,6 +361,7 @@ export function BridgeForm({
 									style={{
 										backgroundColor: "#ff8800",
 										color: "#ffffff",
+										minWidth: "140px",
 										"&:hover": {
 											backgroundColor: "#cc6600",
 										},
@@ -405,6 +387,7 @@ export function BridgeForm({
 									style={{
 										backgroundColor: "#2d662d",
 										color: "#ffffff",
+										minWidth: "140px",
 										"&:hover": {
 											backgroundColor: "#1a4d1a",
 										},
