@@ -36,6 +36,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
+# Remove default nginx configuration to prevent read-only file system warnings
+RUN rm -f /etc/nginx/conf.d/default.conf
+
 # Create necessary directories with proper permissions
 RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run && \
     chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run /usr/share/nginx/html && \
@@ -43,9 +46,6 @@ RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run && \
 
 # Expose both HTTP and HTTPS ports
 EXPOSE 80 443
-
-# Switch to non-root user
-USER nginx
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"] 
