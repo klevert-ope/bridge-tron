@@ -36,16 +36,17 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Remove default nginx configuration to prevent read-only file system warnings
-RUN rm -f /etc/nginx/conf.d/default.conf
+# Remove default nginx configuration and entrypoint scripts to simplify
+RUN rm -f /etc/nginx/conf.d/default.conf && \
+    rm -rf /docker-entrypoint.d/
 
 # Create necessary directories with proper permissions
 RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run && \
     chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run /usr/share/nginx/html && \
     chmod -R 755 /usr/share/nginx/html
 
-# Expose both HTTP and HTTPS ports
-EXPOSE 80 443
+# Expose port 80
+EXPOSE 80
 
-# Start nginx
+# Start nginx directly without entrypoint scripts
 CMD ["nginx", "-g", "daemon off;"] 
