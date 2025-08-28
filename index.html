@@ -126,7 +126,7 @@
 			href="/manifest.json"
 		/>
 
-		<!-- Security Meta Tags -->
+		<!-- Security Meta Tags (CSP handled by nginx) -->
 		<meta
 			http-equiv="X-Content-Type-Options"
 			content="nosniff"
@@ -137,7 +137,7 @@
 		/>
 		<meta
 			http-equiv="Referrer-Policy"
-			content="strict-origin-when-cross-origin"
+			content="no-referrer"
 		/>
 
 		<!-- Preconnect to external domains -->
