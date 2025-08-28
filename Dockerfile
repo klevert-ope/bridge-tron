@@ -9,8 +9,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including dev dependencies needed for build)
+RUN npm ci
 
 # Copy the rest of the app's source code
 COPY . .
@@ -26,9 +26,9 @@ RUN apk update && apk upgrade && \
     apk add --no-cache curl && \
     rm -rf /var/cache/apk/*
 
-# Create non-root user for nginx
-RUN addgroup -g 1001 -S nginx && \
-    adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx
+# Ensure nginx user and group exist with proper permissions
+RUN if ! getent group nginx > /dev/null 2>&1; then addgroup -g 1001 -S nginx; fi && \
+    if ! getent passwd nginx > /dev/null 2>&1; then adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx; fi
 
 # Copy the build files from the builder stage to nginx's default directory
 COPY --from=builder /app/dist /usr/share/nginx/html
