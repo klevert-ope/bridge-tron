@@ -6,11 +6,12 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
+		"build:prod": "vite build --mode production",
 		"lint": "eslint .",
 		"preview": "vite preview"
 	},
 	"dependencies": {
-		"@allbridge/bridge-core-sdk": "^3.23.1",
+		"@allbridge/bridge-core-sdk": "^3.24.0",
 		"@mantine/core": "^8.2.7",
 		"@mantine/form": "^8.2.7",
 		"@mantine/hooks": "^8.2.7",
@@ -18,20 +19,23 @@
 		"@mantine/notifications": "^8.2.7",
 		"@tabler/icons-react": "^3.34.1",
 		"@vitejs/plugin-legacy": "^7.2.1",
+		"autoprefixer": "^10.4.21",
 		"buffer": "^6.0.3",
 		"crypto-browserify": "^3.12.1",
+		"cssnano": "^7.1.1",
 		"ethers": "^6.15.0",
 		"process": "^0.11.10",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1",
 		"stream-browserify": "^3.0.0",
 		"util": "^0.12.5",
+		"vite-plugin-compression": "^0.5.1",
 		"vite-plugin-node-polyfills": "^0.24.0"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.34.0",
 		"@types/react": "^19.1.12",
-		"@types/react-dom": "^19.1.8",
+		"@types/react-dom": "^19.1.9",
 		"@vitejs/plugin-react": "^5.0.2",
 		"eslint": "^9.34.0",
 		"eslint-plugin-react-hooks": "^5.2.0",

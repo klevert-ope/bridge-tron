@@ -1,49 +1,47 @@
 {
-	"id": "/",
-	"name": "Almansoori Swap",
-	"short_name": "Swap",
-	"description": "A secure and efficient cryptocurrency swapping platform supporting multiple chains and tokens.",
+	"name": "BRIDGE",
+	"short_name": "BRIDGE",
+	"description": "A secure and efficient cryptocurrency bridge platform supporting multiple chains and tokens",
 	"start_url": "/",
 	"display": "standalone",
-	"background_color": "#343434",
-	"theme_color": "#000000",
+	"background_color": "#ffffff",
+	"theme_color": "#ffffff",
 	"orientation": "portrait-primary",
 	"scope": "/",
 	"lang": "en",
 	"categories": ["finance", "utilities"],
 	"icons": [
 		{
-			"src": "/web-app-manifest-192x192.png",
+			"src": "/favicon.ico",
+			"sizes": "16x16 32x32 48x48",
+			"type": "image/x-icon"
+		},
+		{
+			"src": "/favicon-16x16.png",
+			"sizes": "16x16",
+			"type": "image/png"
+		},
+		{
+			"src": "/favicon-32x32.png",
+			"sizes": "32x32",
+			"type": "image/png"
+		},
+		{
+			"src": "/favicon-96x96.png",
+			"sizes": "96x96",
+			"type": "image/png"
+		},
+		{
+			"src": "/android-icon-192x192.png",
 			"sizes": "192x192",
 			"type": "image/png",
-			"purpose": "any"
+			"purpose": "any maskable"
 		},
 		{
-			"src": "/web-app-manifest-512x512.png",
-			"sizes": "512x512",
-			"type": "image/png",
-			"purpose": "any"
-		},
-		{
-			"src": "/apple-touch-icon.png",
+			"src": "/apple-icon-180x180.png",
 			"sizes": "180x180",
 			"type": "image/png",
 			"purpose": "any"
-		}
-	],
-	"shortcuts": [
-		{
-			"name": "Bridge to Tron",
-			"short_name": "Bridge",
-			"description": "Bridge your Ethereum tokens to Tron",
-			"url": "/",
-			"icons": [
-				{
-					"src": "/favicon-96x96.png",
-					"sizes": "96x96",
-					"type": "image/png"
-				}
-			]
 		}
 	]
 }

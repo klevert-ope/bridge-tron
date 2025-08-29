@@ -6,6 +6,10 @@ FROM node:24-alpine AS builder
 # Set working directory inside the container
 WORKDIR /app
 
+# Set environment variables for production build
+ENV NODE_ENV=production
+ENV VITE_MODE=production
+
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
@@ -15,8 +19,8 @@ RUN npm ci
 # Copy the rest of the app's source code
 COPY . .
 
-# Build the app
-RUN npm run build
+# Build the app for production
+RUN npm run build:prod
 
 # Step 2: Use nginx to serve static files with security enhancements
 FROM nginx:alpine
