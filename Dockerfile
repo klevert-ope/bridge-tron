@@ -6,15 +6,18 @@ FROM node:24-alpine AS builder
 # Set working directory inside the container
 WORKDIR /app
 
-# Set environment variables for production build
-ENV NODE_ENV=production
-ENV VITE_MODE=production
-
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
 # Install all dependencies (including dev dependencies needed for build)
-RUN npm ci
+RUN npm ci --only=production=false
+
+# Clear npm cache to ensure clean build
+RUN npm cache clean --force
+
+# Set environment variables for production build
+ENV NODE_ENV=production
+ENV VITE_MODE=production
 
 # Copy the rest of the app's source code
 COPY . .
